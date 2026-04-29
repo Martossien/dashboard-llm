@@ -1,0 +1,33 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.coverage
+htmlcov/
+*.log
+.env
+venv/
+
+# Configuration personnelle (contient tokens/mots de passe)
+config.yaml
+config.yaml.*
+config.example.yaml.backup*
+
+# Sauvegardes monitor.py
+monitor.py.backup*
+monitor.py.bck*
+monitor_new.py
+
+# Données personnelles / locales
+llama_load_stats.json
+grep
+patch_restart_dropdown.py
+
+# Dossiers privés
+docs/
+backups/
+inspirations/
+.claude/
+.codex

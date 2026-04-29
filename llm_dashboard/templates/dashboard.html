@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>System & AI Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>System &amp; AI Monitoring Dashboard</h1>
+        
+        <div style="text-align:center;margin-bottom:15px;">
+            <a href="/admin" style="color:#58a6ff;text-decoration:none;font-size:13px;border:1px solid #30363d;padding:6px 14px;border-radius:4px;background:#161b22;">Admin Panel</a>
+            <a href="/help" style="color:#58a6ff;text-decoration:none;font-size:13px;border:1px solid #30363d;padding:6px 14px;border-radius:4px;background:#161b22;margin-left:8px;">Aide</a>
+        </div>
+        
+        <div class="model-display">
+            <span class="model-label">LOADED MODEL:</span>
+            <span class="model-name" id="model-name">Detecting...</span>
+        </div>
+        
+        <div class="top-section">
+            <div class="card">
+                <h3>CPU Load</h3>
+                <div class="stat-value" id="cpu-load">0%</div>
+            </div>
+            <div class="card">
+                <h3>RAM Usage</h3>
+                <div class="stat-value" id="ram-usage">0 / 0 GB</div>
+                <div id="ram-percent" style="font-size: 14px; margin-top: 5px;">0%</div>
+            </div>
+            <div class="card">
+                <h3>Services Status</h3>
+                <div id="services-status"></div>
+            </div>
+        </div>
+
+        <div class="gpu-section" id="gpu-cards"></div>
+
+        <div class="logs-section">
+            <div class="logs-header">
+                <h3>Terminal Logs</h3>
+                <button id="pause-btn">Pause Refresh</button>
+            </div>
+            <div class="logs-panels" id="logs-panels"></div>
+        </div>
+    </div>
+
+    <script>
+    window.DASHBOARD_CONFIG = {
+        refreshIntervalMs: {{ refresh_interval_ms }},
+        vramWarningPercent: {{ vram_warning_percent }},
+        vramDangerPercent: {{ vram_danger_percent }},
+        powerWarningPercent: {{ power_warning_percent }},
+        powerDangerPercent: {{ power_danger_percent }}
+    };
+    </script>
+    <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+</body>
+</html>

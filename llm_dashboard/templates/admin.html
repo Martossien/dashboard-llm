@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel — Services LLM</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/admin.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>Admin Panel — Controle des Services</h1>
+        <div class="top-bar">
+            <a href="/">Dashboard principal</a>
+            <a href="/help">Aide</a>
+            <a href="/admin/logout">Deconnexion</a>
+        </div>
+
+        <div class="notice">
+            <strong>Regle : un seul service LLM a la fois.</strong><br>
+            GLM-4.7, Qwen3.6-35B (Q8, UD-Q8) et Qwen3.6-27B vLLM partagent le port 8080.
+            Pour demarrer l'un, les autres doivent etre arretes.
+            Les services auxiliaires (Voxtral TTS/STT, Ollama) peuvent tourner simultanement.
+        </div>
+
+        <div class="global-bar">
+            <div>
+                <button class="btn-global" id="stop-all-llm">Arreter tous les LLM</button>
+            </div>
+            <div id="running-llm" style="font-size:13px;color:#58a6ff;"></div>
+        </div>
+
+        <!-- VRAM enriched -->
+        <div class="vram-bar">
+            <h3>VRAM GPUs — Statut d'arret</h3>
+            <div id="vram-content">
+                {% if vram.enabled %}
+                    {% if vram.error %}
+                        <div class="gpu-line gpu-warn">Erreur VRAM : {{ vram.error }}</div>
+                    {% else %}
+                        {% for gpu in vram.gpus %}
+                            <div class="gpu-line">
+                                GPU {{ gpu.index }} ({{ gpu.name }}):
+                                {{ "%.0f".format(gpu.used_mb) }} MiB utilise /
+                                {{ "%.0f".format(gpu.total_mb) }} MiB total
+                                = {{ "%.0f".format(gpu.free_mb) }} MiB libres
+                                ({{ "%.1f".format(gpu.usage_percent) }}%)
+                                {% if gpu.usage_percent > 90 %}
+                                    <span class="gpu-danger">CRITIQUE</span>
+                                {% elif gpu.usage_percent > 70 %}
+                                    <span class="gpu-warn">Attention</span>
+                                {% else %}
+                                    <span class="gpu-ok">OK</span>
+                                {% endif %}
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+                    <div class="vram-summary" id="vram-advice">
+                        {% set total_used = vram.gpus | map(attribute='used_mb') | sum if vram.gpus else 0 %}
+                        {% if total_used > 500 %}
+                            <span class="vram-risk">ATTENTION — VRAM utilisee : {{ "%.0f".format(total_used) }} MiB au total. Il reste probablement des residus GPU. Utilisez "Force Kill" si l'arret normal ne libere pas.</span>
+                        {% else %}
+                            <span class="vram-safe">VRAM quasi-libre. Arret sans risque possible si aucun process GPU actif.</span>
+                        {% endif %}
+                    </div>
+                {% else %}
+                    <div class="gpu-line">GPU monitoring desactive.</div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- LLM Controls — Dropdown choix unique -->
+        <div class="card" style="margin-bottom: 15px;">
+            <div class="card-title">&#9679; LLM Engine (Port 8080)</div>
+            <div class="meta">Un seul modele actif a la fois</div>
+            <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 8px;">
+                <select class="llm-selector" id="llm-select">
+                    <option value="" disabled selected>-- Choisir un modele --</option>
+                    {% for key, svc in services.items() %}
+                    {% if svc.is_llm and svc.port == 8080 %}
+                    <option value="{{ key }}" {% if svc.running %}selected{% endif %}>{{ svc.display_name }}</option>
+                    {% endif %}
+                    {% endfor %}
+                </select>
+                <button class="btn-start" id="llm-start-btn" onclick="handleLLM('start')">Demarrer</button>
+                <button class="btn-restart" id="llm-restart-btn" onclick="handleLLM('restart')">Redemarrer</button>
+                <button class="btn-stop" id="llm-stop-btn" onclick="handleLLM('stop')">Arreter</button>
+                <button class="btn-force" id="llm-force-btn" onclick="handleLLM('force_stop')">Force Kill</button>
+            </div>
+            <div class="timer-display" id="llm-timer"></div>
+        </div>
+
+        <!-- Services Auxiliaires (cartes individuelles) -->
+        <div class="grid" id="services-grid">
+            {% for key, svc in services.items() %}
+            {% if not (svc.is_llm and svc.port == 8080) %}
+            <div class="card" data-key="{{ key }}">
+                <div class="card-title">
+                    <span class="status-dot" id="dot-{{ key }}">&#9679;</span>
+                    {{ svc.display_name }}
+                </div>
+                <div class="meta">
+                    Port: {{ svc.port }} | Unite: {{ svc.unit }} | Type: {{ "LLM" if svc.is_llm else "Auxiliaire" }}
+                </div>
+                <div class="button-row">
+                    <button class="btn-start" id="start-btn-{{ key }}"
+                        {% if svc.running %}disabled{% endif %}
+                        onclick="handleAction('{{ key }}', 'start')">Demarrer</button>
+                    <button class="btn-stop" id="stop-btn-{{ key }}"
+                        {% if not svc.running %}disabled{% endif %}
+                        onclick="handleAction('{{ key }}', 'stop')">Arreter</button>
+                    <button class="btn-force" id="force-btn-{{ key }}"
+                        {% if not svc.running %}disabled{% endif %}
+                        onclick="handleAction('{{ key }}', 'force_stop')">Force Kill</button>
+                </div>
+                <div class="timer-display" id="timer-{{ key }}"></div>
+            </div>
+            {% endif %}
+            {% endfor %}
+        </div>
+
+        <!-- Terminal logs par service -->
+        <div class="logs-section">
+            <h3>Logs des Services (temps reel)</h3>
+            <div class="logs-panels" id="logs-panels"></div>
+        </div>
+    </div>
+
+    <div id="toast" class="toast"></div>
+
+    <script>
+    window.ADMIN_INITIAL_STATE = {
+        services: {{ services | tojson }}
+    };
+    </script>
+    <script src="{{ url_for('static', filename='js/admin.js') }}"></script>
+</body>
+</html>

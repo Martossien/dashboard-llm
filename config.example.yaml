@@ -1,0 +1,110 @@
+# Example configuration for dashboard-llm.
+# Copy to config.yaml and edit as needed.
+
+server:
+  # Bind address for Flask.
+  host: "0.0.0.0"
+  # Port for the dashboard HTTP server.
+  port: 5000
+  # Enable Flask debug mode (use false in production).
+  debug: false
+
+monitoring:
+  # Frontend refresh cadence in milliseconds.
+  refresh_interval_ms: 1000
+  # Max log lines to render per service.
+  log_lines: 50
+  # Block size used for tailing logs.
+  log_block_bytes: 8192
+
+services:
+  llama_cpp:
+    # Logical name shown in the UI.
+    name: "ik_llama.cpp"
+    # Base URL for the primary LLM service (do not change port 8080 if it is your main service).
+    base_url: "http://127.0.0.1:8080"
+    # Health endpoint path for service status.
+    health_endpoint: "/health"
+    # Models endpoint path for model name discovery.
+    models_endpoint: "/v1/models"
+    # HTTP timeout in seconds for llama.cpp calls.
+    timeout_seconds: 2
+    # Log file for ik_llama.cpp output.
+    log_file: "/var/log/launch_llm.log"
+
+  vllm:
+    # Logical name shown in the UI.
+    name: "vLLM Qwen3.6-27B"
+    # Base URL — shares port 8080 with llama_cpp (only one active at a time).
+    base_url: "http://127.0.0.1:8080"
+    # Health endpoint path for service status.
+    health_endpoint: "/health"
+    # Models endpoint path for model name discovery.
+    models_endpoint: "/v1/models"
+    # HTTP timeout in seconds for vLLM calls.
+    timeout_seconds: 2
+    # Log file for vLLM output.
+    log_file: "/var/log/vllm_qwen36_27b.log"
+
+  ollama:
+    # Logical name shown in the UI.
+    name: "Ollama"
+    # Base URL for the Ollama service.
+    base_url: "http://127.0.0.1:11434"
+    # Health endpoint path for service status.
+    health_endpoint: "/"
+    # HTTP timeout in seconds for Ollama calls.
+    timeout_seconds: 2
+    # Log source type: "journalctl" reads from systemd journal.
+    log_type: "journalctl"
+    # Systemd unit name for journalctl log reading.
+    journalctl_unit: "ollama"
+    # Max lines to read from journalctl.
+    journalctl_lines: 50
+
+  voxtral:
+    # Logical name shown in the UI.
+    name: "Voxtral-web (TTS)"
+    # Base URL for the Voxtral TTS service.
+    base_url: "http://127.0.0.1:6060"
+    # Health endpoint path for service status.
+    health_endpoint: "/healthz"
+    # HTTP timeout in seconds for Voxtral TTS calls.
+    timeout_seconds: 2
+    # Log file for Voxtral TTS output.
+    log_file: "/opt/voxtral-web/logs/voxtral-web.log"
+
+  voxtral_stt:
+    # Logical name shown in the UI.
+    name: "Voxtral-WebUI (STT)"
+    # Base URL for the Voxtral STT service (Gradio).
+    base_url: "http://127.0.0.1:7860"
+    # Health endpoint path for service status (Gradio root page).
+    health_endpoint: "/"
+    # HTTP timeout in seconds for Voxtral STT calls.
+    timeout_seconds: 2
+    # Log file for Voxtral-WebUI output.
+    log_file: "/root/Voxtral-WebUI/app.log"
+
+gpu:
+  # Toggle NVML collection.
+  enable: true
+
+model_detection:
+  # Cache duration for model name results.
+  cache_seconds: 5
+  # Grace period before clearing cached model name.
+  cache_grace_seconds: 30
+  # Minimum seconds between process scans.
+  process_scan_interval_seconds: 30
+  # Keywords used to match llama.cpp process command lines.
+  process_keywords: ["ik_llama", "server"]
+  # Flags used to find the model path in command lines.
+  model_arg_flags: ["-m", "--model"]
+
+thresholds:
+  # Frontend warning/danger levels for VRAM and power.
+  vram_warning_percent: 70
+  vram_danger_percent: 90
+  power_warning_percent: 70
+  power_danger_percent: 90

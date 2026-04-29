@@ -1,0 +1,117 @@
+"""Prometheus /metrics endpoint and public /api/v1/* REST API.
+
+Pas d'import depuis monitor.py.
+"""
+
+from flask import jsonify, Response
+
+
+def _escape_label(value) -> str:
+    """Echappe une valeur de label Prometheus."""
+    return str(value).replace("\\", "\\\\").replace("\n", "\\n").replace('"', '\\"')
+
+
+def create_metrics_endpoint(get_cpu_info, get_ram_info, get_gpu_info,
+                            get_services_status, detect_model_name):
+    """Cree une route /metrics au format Prometheus text."""
+
+    def metrics():
+        lines = []
+
+        # CPU
+        cpu = get_cpu_info()
+        lines.append('# HELP cpu_load_percent CPU load percentage')
+        lines.append('# TYPE cpu_load_percent gauge')
+        lines.append(f'cpu_load_percent {cpu["load"]}')
+
+        # RAM
+        ram = get_ram_info()
+        lines.append('# HELP ram_used_gb RAM used in GB')
+        lines.append('# TYPE ram_used_gb gauge')
+        lines.append(f'ram_used_gb {ram["used"]}')
+        lines.append('# HELP ram_total_gb RAM total in GB')
+        lines.append('# TYPE ram_total_gb gauge')
+        lines.append(f'ram_total_gb {ram["total"]}')
+
+        # GPU
+        lines.append('# HELP gpu_memory_used_gib GPU memory used')
+        lines.append('# TYPE gpu_memory_used_gib gauge')
+        lines.append('# HELP gpu_temperature_celsius GPU temperature')
+        lines.append('# TYPE gpu_temperature_celsius gauge')
+        lines.append('# HELP gpu_utilization_pct GPU utilization')
+        lines.append('# TYPE gpu_utilization_pct gauge')
+        lines.append('# HELP gpu_power_watts GPU power draw')
+        lines.append('# TYPE gpu_power_watts gauge')
+        gpus = get_gpu_info()
+        for gpu in gpus:
+            idx = _escape_label(gpu.get('id', 0))
+            mem = gpu.get('memory', {})
+            lines.append(f'gpu_memory_used_gib{{gpu="{idx}"}} {mem.get("used", 0)}')
+            lines.append(f'gpu_temperature_celsius{{gpu="{idx}"}} {gpu.get("temp", 0)}')
+            lines.append(f'gpu_utilization_pct{{gpu="{idx}"}} {gpu.get("gpu_util", 0)}')
+            lines.append(f'gpu_power_watts{{gpu="{idx}"}} {gpu.get("power", 0)}')
+
+        # Services
+        lines.append('# HELP llm_service_up Service health status')
+        lines.append('# TYPE llm_service_up gauge')
+        services = get_services_status()
+        for svc_name, status in (services.get('services', {}) or {}).items():
+            svc_label = _escape_label(svc_name)
+            up_value = 1 if status == 'UP' else 0
+            lines.append(f'llm_service_up{{service="{svc_label}"}} {up_value}')
+
+        # Model
+        model = _escape_label(detect_model_name() or 'unknown')
+        lines.append('# HELP llm_model_info Active model name')
+        lines.append('# TYPE llm_model_info gauge')
+        lines.append(f'llm_model_info{{model="{model}"}} 1')
+
+        lines.append('')
+        return Response('\n'.join(lines), mimetype='text/plain; version=0.0.4')
+
+    return metrics
+
+
+def register_public_api(app, get_cpu_info, get_ram_info, get_gpu_info,
+                        get_services_status, detect_model_name,
+                        get_logs, get_llama_timings, get_vllm_timings,
+                        config):
+    """Enregistre /metrics, /api/v1/gpus, /api/v1/services, /api/v1/metrics."""
+
+    _ = get_logs, get_llama_timings, get_vllm_timings  # unused for now
+
+    @app.route('/metrics')
+    def metrics_route():
+        return create_metrics_endpoint(
+            get_cpu_info, get_ram_info, get_gpu_info,
+            get_services_status, detect_model_name
+        )()
+
+    @app.route('/api/v1/gpus')
+    def public_gpus():
+        return jsonify({"gpus": get_gpu_info()})
+
+    @app.route('/api/v1/services')
+    def public_services():
+        svc_status = get_services_status()
+        return jsonify({
+            "services": svc_status.get("services", {}),
+            "active_on_ports": {
+                "8080": svc_status.get("active_on_8080"),
+            },
+            "model_on_8080": svc_status.get("model_on_8080"),
+        })
+
+    @app.route('/api/v1/metrics')
+    def public_metrics():
+        cpu = get_cpu_info()
+        ram = get_ram_info()
+        gpus = get_gpu_info()
+        svc_status = get_services_status()
+        return jsonify({
+            "cpu": cpu,
+            "ram": ram,
+            "gpus": gpus,
+            "services": svc_status.get("services", {}),
+            "model": detect_model_name() or "unknown",
+        })

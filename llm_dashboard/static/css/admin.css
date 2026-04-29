@@ -1,0 +1,178 @@
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Courier New', monospace;
+            background-color: #0d1117;
+            color: #00ff41;
+            padding: 20px;
+        }
+        .container { max-width: 1400px; margin: 0 auto; }
+        h1 { color: #00ff41; text-align: center; margin-bottom: 20px; text-shadow: 0 0 10px #00ff41; }
+        .notice {
+            background: #161b22;
+            border: 1px solid #d29922;
+            color: #d29922;
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            font-size: 13px;
+        }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 15px; }
+        .card {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            padding: 15px;
+        }
+        .card-title {
+            font-size: 14px; font-weight: bold;
+            color: #58a6ff;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .status-up { color: #238636; }
+        .status-down { color: #da3633; }
+        .status-loading { color: #d29922; }
+        .meta { font-size: 11px; color: #8b949e; margin-bottom: 8px; }
+        .button-row { display: flex; gap: 8px; flex-wrap: wrap; }
+        button {
+            padding: 6px 14px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .btn-start { background: #238636; color: white; }
+        .btn-start:hover { background: #2ea043; }
+        .btn-start:disabled { background: #2ea043; opacity: 0.4; cursor: not-allowed; }
+        .btn-stop { background: #da3633; color: white; }
+        .btn-stop:hover { background: #f85149; }
+        .btn-stop:disabled { background: #f85149; opacity: 0.4; cursor: not-allowed; }
+        .btn-force {
+            background: #da3633; color: white; border: 1px solid #f85149;
+        }
+        .btn-force:hover { background: #f85149; }
+        .btn-force:disabled { opacity: 0.4; cursor: not-allowed; }
+        .btn-restart {
+            background: #d29922; color: white; border: 1px solid #e3b341;
+        }
+        .btn-restart:hover { background: #e3b341; }
+        .btn-restart:disabled { opacity: 0.4; cursor: not-allowed; }
+        .llm-selector {
+            background: #0d1117;
+            border: 1px solid #30363d;
+            color: #c9d1d9;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-family: inherit;
+            font-size: 13px;
+            min-width: 280px;
+        }
+        .timer-display {
+            font-size: 12px; color: #8b949e; margin-top: 6px;
+        }
+        .timer-active {
+            color: #d29922; font-weight: bold;
+        }
+        .timer-done {
+            color: #238636;
+        }
+        .global-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .btn-global {
+            background: #a371f7; color: white; padding: 10px 20px; font-size: 13px;
+        }
+        .btn-global:hover { background: #bc8cff; }
+        .vram-bar {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 20px;
+        }
+        .vram-bar h3 { color: #58a6ff; font-size: 14px; margin-bottom: 8px; }
+        .gpu-line { font-size: 12px; color: #c9d1d9; margin-bottom: 4px; }
+        .gpu-ok { color: #238636; }
+        .gpu-warn { color: #d29922; }
+        .gpu-danger { color: #da3633; }
+        .vram-summary { margin-top: 8px; padding-top: 8px; border-top: 1px solid #30363d; font-size: 12px; }
+        .vram-safe { color: #238636; }
+        .vram-risk { color: #f85149; }
+        .top-bar {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 18px; flex-wrap: wrap; gap: 10px;
+        }
+        .top-bar a { color: #58a6ff; text-decoration: none; font-size: 13px; }
+        .top-bar a:hover { text-decoration: underline; }
+        .toast {
+            position: fixed; top: 20px; right: 20px;
+            background: #161b22;
+            border: 1px solid #30363d;
+            padding: 12px 16px;
+            border-radius: 6px;
+            font-size: 12px;
+            z-index: 1000;
+            display: none;
+            max-width: 320px;
+        }
+        .toast.show { display: block; }
+        .toast.success { border-color: #238636; color: #00ff41; }
+        .toast.error { border-color: #da3633; color: #f85149; }
+
+        /* Terminal logs (meme style que page principale) */
+        .logs-section {
+            margin-top: 25px;
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            padding: 15px;
+        }
+        .logs-section h3 { color: #58a6ff; font-size: 14px; margin-bottom: 10px; }
+        .logs-panels {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+            gap: 12px;
+        }
+        .logs-panel {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .logs-panel-header {
+            background: #30363d;
+            padding: 6px 12px;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .logs-panel-header .tab-dot { font-size: 10px; color: #238636; }
+        .logs-panel-header .panel-name { color: #00ff41; font-weight: bold; }
+        .logs-container {
+            background: #0d1117;
+            padding: 8px;
+            height: 220px;
+            overflow-y: auto;
+            font-size: 11px;
+            border-left: 3px solid #00ff41;
+        }
+        .log-line {
+            margin-bottom: 2px;
+            white-space: pre-wrap;
+            color: #c9d1d9;
+        }
+        .log-empty { color: #484f58; font-style: italic; }
+
+        @media (max-width: 768px) {
+            .grid, .logs-panels { grid-template-columns: 1fr; }
+        }
