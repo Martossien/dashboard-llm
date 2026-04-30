@@ -272,7 +272,8 @@
         @media (max-width: 768px) {
             .top-section, .gpu-section {
                 grid-template-columns: 1fr;
-}
+            }
+        }
 
 /* GPU Process Viewer */
 .gpu-processes-section {
@@ -321,4 +322,3 @@
 .gpu-process-service-badge.ik_llama_cpp { background: #9e6a03; color: #fff; }
 .gpu-process-service-badge.python { background: #30363d; color: #8b949e; }
 .gpu-process-service-badge.unknown { background: #30363d; color: #8b949e; }
-        }

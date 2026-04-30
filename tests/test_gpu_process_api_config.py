@@ -70,6 +70,36 @@ class TestPublicGPUProcessAPIConfig:
             data = resp.get_json()
             assert len(data["processes"]) == 3
 
+    def test_sort_before_max(self):
+        """Les plus gros consommateurs VRAM doivent être retournés quand max_processes limite."""
+        from llm_dashboard.web.metrics import register_public_api
+        app = Flask(__name__)
+        # Unsorted: 100, 900, 500
+        processes = [
+            {"pid": 1, "used_vram_mib": 100},
+            {"pid": 2, "used_vram_mib": 900},
+            {"pid": 3, "used_vram_mib": 500},
+        ]
+        register_public_api(app,
+            get_cpu_info=lambda: {"load": 0},
+            get_ram_info=lambda: {"used": 0, "total": 0, "percent": 0},
+            get_gpu_info=lambda: [],
+            get_services_status=lambda: {"services": {}, "active_on_8080": None, "model_on_8080": None},
+            detect_model_name=lambda: "unknown",
+            get_logs=lambda: {},
+            get_llama_timings=lambda: (None, None),
+            get_vllm_timings=lambda: (None, None),
+            config={"gpu_processes": {"enable": True, "max_processes": 2}},
+            get_gpu_processes=lambda: processes,
+        )
+        with app.test_client() as client:
+            resp = client.get('/api/v1/gpus/processes')
+            data = resp.get_json()
+            assert len(data["processes"]) == 2
+            # Must be the top 2 by VRAM: 900 and 500, not 100 and 900
+            vrams = [p["used_vram_mib"] for p in data["processes"]]
+            assert vrams == [900, 500], f"Expected [900, 500] got {vrams}"
+
     def test_alias_same_as_canonical(self):
         from llm_dashboard.web.metrics import register_public_api
         app = Flask(__name__)

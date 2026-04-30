@@ -28,13 +28,38 @@ class TestCSSStatic:
         import os
         path = os.path.join(os.path.dirname(__file__), "..", "llm_dashboard", "static", "css", "dashboard.css")
         content = open(path).read()
-        # Find first media block end
         media_start = content.find("@media (max-width: 768px)")
         if media_start == -1:
             pytest.skip("No media block found")
-        # Find first GPU style position
-        gpu_pos = content.find(".gpu-processes-section")
-        assert gpu_pos > media_start, "GPU styles appear before/inside media block"
+        # Find the NEXT { which is the media block opening
+        media_open = content.find("{", media_start)
+        assert media_open != -1, "Media block has no opening brace"
+        assert content[media_start:media_open].count("{") == 0, "Unexpected { between @media and its opening brace"
+        # Find matching close via depth counter
+        media_close = _find_matching_brace(content, media_open)
+        assert media_close != -1, "Media block not closed"
+        # GPU styles must start after media block closes
+        gpu_pos = content.rfind("GPU Process Viewer", 0, media_open)  # before media = ok
+        if gpu_pos == -1:
+            gpu_pos = content.find(".gpu-processes-section")
+        if gpu_pos == -1:
+            pytest.fail("GPU Process Viewer styles not found")
+        assert gpu_pos < media_open or gpu_pos > media_close, (
+            f"Media block closes at pos {media_close}, "
+            f"but GPU Process Viewer starts at pos {gpu_pos}"
+        )
+
+
+def _find_matching_brace(text, open_pos):
+    depth = 0
+    for i in range(open_pos, len(text)):
+        if text[i] == "{":
+            depth += 1
+        elif text[i] == "}":
+            depth -= 1
+            if depth == 0:
+                return i
+    return -1
 
 
 class TestJSStatic:

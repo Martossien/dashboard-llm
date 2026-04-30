@@ -204,18 +204,19 @@ class AdminAPIRoutes:
             if not gp_config.get("enable", True):
                 return jsonify(build_gpu_process_payload([], enabled=False))
             processes = []
+            max_procs = gp_config.get("max_processes", 100)
             if callable(self._get_gpu_processes):
                 try:
                     raw = self._get_gpu_processes()
                     show_cmd = gp_config.get("show_command", True)
-                    max_procs = gp_config.get("max_processes", 100)
                     for p in raw:
                         entry = dict(p)
                         if not show_cmd:
                             entry["command"] = None
                         processes.append(entry)
-                    if max_procs and len(processes) > max_procs:
-                        processes = processes[:max_procs]
                 except Exception as exc:
                     logger.warning("get_gpu_processes failed: %s", exc)
+            processes.sort(key=lambda p: p.get("used_vram_mib", p.get("vram_mib", 0)), reverse=True)
+            if max_procs and len(processes) > max_procs:
+                processes = processes[:max_procs]
             return jsonify(build_gpu_process_payload(processes, enabled=True))

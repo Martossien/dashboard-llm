@@ -87,33 +87,41 @@ def create_metrics_endpoint(get_cpu_info, get_ram_info, get_gpu_info,
             lines.append('# TYPE gpu_process_memory_total_mib gauge')
             try:
                 all_procs = get_gpu_processes()
-                vendor = _escape_label(all_procs[0].get("backend", "nvidia") if all_procs else "unknown")
-                total_vram = sum(p.get("used_vram_mib", p.get("vram_mib", 0)) for p in all_procs)
 
-                # Count per GPU index
-                gpu_counts: dict[str, int] = {}
+                # Aggregate per (gpu_index, vendor) and per vendor
+                count_by_gpu_vendor: dict[tuple, int] = {}
+                total_by_vendor: dict[str, float] = {}
+
                 for p in all_procs:
+                    v = str(p.get("backend") or "unknown")
                     gpu_idx = str(p.get("gpu_index", "unknown"))
-                    gpu_counts[gpu_idx] = gpu_counts.get(gpu_idx, 0) + 1
+                    vram = p.get("used_vram_mib", p.get("vram_mib", 0)) or 0
+                    key = (gpu_idx, v)
+                    count_by_gpu_vendor[key] = count_by_gpu_vendor.get(key, 0) + 1
+                    total_by_vendor[v] = total_by_vendor.get(v, 0.0) + float(vram)
 
-                for gpu_idx, count in sorted(gpu_counts.items()):
-                    lines.append(f'gpu_process_count{{gpu_index="{_escape_label(gpu_idx)}",vendor="{vendor}"}} {count}')
+                for (gpu_idx, vendor), count in sorted(count_by_gpu_vendor.items()):
+                    lines.append(f'gpu_process_count{{gpu_index="{_escape_label(gpu_idx)}",vendor="{_escape_label(vendor)}"}} {count}')
 
-                lines.append(f'gpu_process_memory_total_mib{{vendor="{vendor}"}} {total_vram}')
+                for vendor, total in sorted(total_by_vendor.items()):
+                    lines.append(f'gpu_process_memory_total_mib{{vendor="{_escape_label(vendor)}"}} {total}')
+
                 for p in all_procs:
                     pid = _escape_label(str(p.get("pid", "?")))
                     name = _escape_label(p.get("process_name", p.get("name", "unknown")))
                     gpu_idx = _escape_label(str(p.get("gpu_index", "unknown")))
-                    service = _escape_label(p.get("service_guess", "unknown"))
+                    svc = _escape_label(p.get("service_guess", "unknown"))
+                    v = _escape_label(str(p.get("backend") or "unknown"))
                     vram = p.get("used_vram_mib", p.get("vram_mib", 0))
                     lines.append(
                         f'gpu_process_memory_used_mib{{'
                         f'pid="{pid}",gpu_index="{gpu_idx}",'
-                        f'process_name="{name}",service="{service}",'
-                        f'vendor="{vendor}"}} {vram}'
+                        f'process_name="{name}",service="{svc}",'
+                        f'vendor="{v}"}} {vram}'
                     )
-            except Exception:
-                pass
+            except Exception as exc:
+                import logging
+                logging.getLogger("dashboard-llm.metrics").warning("gpu process metrics failed: %s", exc)
 
         lines.append('')
         return Response('\n'.join(lines), mimetype='text/plain; version=0.0.4')
@@ -176,22 +184,23 @@ def register_public_api(app, get_cpu_info, get_ram_info, get_gpu_info,
         if not gp_config.get("enable", True):
             return jsonify({"processes": [], "count": 0, "total_vram_mib": 0, "enabled": False})
         processes = []
+        max_procs = gp_config.get("max_processes", 100)
         if callable(get_gpu_processes):
             try:
                 raw = get_gpu_processes()
                 show_cmd = gp_config.get("show_command", True)
-                max_procs = gp_config.get("max_processes", 100)
                 for p in raw:
                     entry = dict(p)
                     if not show_cmd:
                         entry["command"] = None
                     processes.append(entry)
-                if max_procs and len(processes) > max_procs:
-                    processes = processes[:max_procs]
             except Exception as exc:
                 import logging
                 logging.getLogger("dashboard-llm").warning("get_gpu_processes failed: %s", exc)
 
         processes.sort(key=lambda p: p.get("used_vram_mib", p.get("vram_mib", 0)), reverse=True)
+
+        if max_procs and len(processes) > max_procs:
+            processes = processes[:max_procs]
 
         return jsonify(build_gpu_process_payload(processes, enabled=True))

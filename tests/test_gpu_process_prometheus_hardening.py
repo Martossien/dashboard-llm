@@ -43,6 +43,29 @@ class TestPrometheusGPUMetrics:
         text = resp.data.decode()
         assert 'gpu_process_memory_total_mib{vendor="nvidia"} 300' in text
 
+    def test_multi_vendor_total(self):
+        """Total VRAM must be per vendor, not global."""
+        from llm_dashboard.web.metrics import create_metrics_endpoint
+        metrics_fn = create_metrics_endpoint(
+            get_cpu_info=lambda: {"load": 0},
+            get_ram_info=lambda: {"used": 0, "total": 0, "percent": 0},
+            get_gpu_info=lambda: [],
+            get_services_status=lambda: {"services": {}},
+            detect_model_name=lambda: "unknown",
+            get_gpu_processes=lambda: [
+                {"pid": 1, "used_vram_mib": 100, "gpu_index": 0, "backend": "nvidia", "process_name": "a", "service_guess": "vllm"},
+                {"pid": 2, "used_vram_mib": 200, "gpu_index": 0, "backend": "nvidia", "process_name": "b", "service_guess": "vllm"},
+                {"pid": 3, "used_vram_mib": 50, "gpu_index": 0, "backend": "amd", "process_name": "c", "service_guess": "ollama"},
+            ],
+        )
+        with Flask(__name__).test_request_context():
+            resp = metrics_fn()
+        text = resp.data.decode()
+        assert 'gpu_process_memory_total_mib{vendor="nvidia"} 300' in text
+        assert 'gpu_process_memory_total_mib{vendor="amd"} 50' in text
+        assert 'gpu_process_count{gpu_index="0",vendor="nvidia"} 2' in text
+        assert 'gpu_process_count{gpu_index="0",vendor="amd"} 1' in text
+
     def test_no_command_in_labels(self):
         from llm_dashboard.web.metrics import create_metrics_endpoint
         metrics_fn = create_metrics_endpoint(
