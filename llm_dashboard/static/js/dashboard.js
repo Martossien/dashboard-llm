@@ -356,7 +356,13 @@
             if (!section || !tbody) return;
             if (!processes.length) {
                 section.style.display = count > 0 ? '' : 'none';
-                tbody.innerHTML = '<tr><td colspan="7">No GPU processes detected</td></tr>';
+                tbody.textContent = '';
+                const row = document.createElement('tr');
+                const cell = document.createElement('td');
+                cell.colSpan = 7;
+                cell.textContent = 'No GPU processes detected';
+                row.appendChild(cell);
+                tbody.appendChild(row);
                 if (summary) summary.textContent = '';
                 return;
             }
@@ -364,7 +370,7 @@
             section.style.display = '';
             if (summary) summary.textContent = count + ' process' + (count !== 1 ? 'es' : '') + ' — ' + total.toFixed(0) + ' MiB VRAM';
 
-            tbody.innerHTML = '';
+            tbody.textContent = '';
             processes.forEach(function(p) {
                 const tr = document.createElement('tr');
                 const idx = p.gpu_index != null ? String(p.gpu_index) : '-';
@@ -373,18 +379,39 @@
                 const cmd = p.command || '';
                 const user = p.username || '-';
 
-                const badgeClass = 'gpu-process-service-badge ' + service;
-                const serviceBadge = '<span class="' + badgeClass + '">' + service + '</span>';
+                const cells = [
+                    { content: idx },
+                    { content: String(p.pid) },
+                    { content: p.process_name || '' },
+                    { content: service, badge: true },
+                    { content: user },
+                    { content: vram },
+                    { content: cmd, cls: 'gpu-process-command', title: cmd }
+                ];
 
-                tr.innerHTML = '<td>' + idx + '</td>' +
-                    '<td>' + p.pid + '</td>' +
-                    '<td>' + escHtml(p.process_name || '') + '</td>' +
-                    '<td>' + serviceBadge + '</td>' +
-                    '<td>' + escHtml(user) + '</td>' +
-                    '<td>' + vram + '</td>' +
-                    '<td class="gpu-process-command" title="' + escAttr(cmd) + '">' + escHtml(cmd) + '</td>';
+                cells.forEach(function(cellDef) {
+                    const td = document.createElement('td');
+                    if (cellDef.badge) {
+                        const span = document.createElement('span');
+                        span.className = 'gpu-process-service-badge ' + safeServiceClass(service);
+                        span.textContent = service;
+                        td.appendChild(span);
+                    } else {
+                        td.textContent = cellDef.content;
+                    }
+                    if (cellDef.cls) td.className = cellDef.cls;
+                    if (cellDef.title) td.title = cellDef.title;
+                    tr.appendChild(td);
+                });
+
                 tbody.appendChild(tr);
             });
+        }
+
+        function safeServiceClass(service) {
+            const allowed = ['vllm', 'ollama', 'llama_cpp', 'ik_llama_cpp', 'python', 'unknown'];
+            return allowed.includes(service) ? service : 'unknown';
+        }
         }
 
         function escHtml(s) {

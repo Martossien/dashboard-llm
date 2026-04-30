@@ -97,7 +97,7 @@ class AdminAPIRoutes:
                 logger.warning("Unauthorized admin API /api/admin/restart from %s", client_ip)
                 return jsonify({"error": "unauthorized"}), 401
             if not _check_csrf():
-                return jsonify({"error": "csrf_validation_failed"}), 403
+                return jsonify({"error": "csrf_failed"}), 403
             data = request.get_json(silent=True) or {}
             key = data.get("service")
             if not key:
@@ -124,7 +124,7 @@ class AdminAPIRoutes:
                 logger.warning("Unauthorized admin API /api/admin/start from %s", client_ip)
                 return jsonify({"error": "unauthorized"}), 401
             if not _check_csrf():
-                return jsonify({"error": "csrf_validation_failed"}), 403
+                return jsonify({"error": "csrf_failed"}), 403
             data = request.get_json(silent=True) or {}
             key = data.get("service")
             if not key:
@@ -142,7 +142,7 @@ class AdminAPIRoutes:
                 logger.warning("Unauthorized admin API /api/admin/stop from %s", client_ip)
                 return jsonify({"error": "unauthorized"}), 401
             if not _check_csrf():
-                return jsonify({"error": "csrf_validation_failed"}), 403
+                return jsonify({"error": "csrf_failed"}), 403
             data = request.get_json(silent=True) or {}
             key = data.get("service")
             if not key:
@@ -160,7 +160,7 @@ class AdminAPIRoutes:
                 logger.warning("Unauthorized admin API /api/admin/force_stop from %s", client_ip)
                 return jsonify({"error": "unauthorized"}), 401
             if not _check_csrf():
-                return jsonify({"error": "csrf_validation_failed"}), 403
+                return jsonify({"error": "csrf_failed"}), 403
             data = request.get_json(silent=True) or {}
             key = data.get("service")
             if not key:
@@ -180,7 +180,7 @@ class AdminAPIRoutes:
                                client_ip)
                 return jsonify({"error": "unauthorized"}), 401
             if not _check_csrf():
-                return jsonify({"error": "csrf_validation_failed"}), 403
+                return jsonify({"error": "csrf_failed"}), 403
             logger.info("Admin STOP_ALL_LLM requested from %s", client_ip)
             results = stop_all_llm()
             logger.info("Admin STOP_ALL_LLM result: %d services stopped", len(results))

@@ -150,7 +150,7 @@ class TestCSRFProtection:
         with app.test_client() as client:
             resp = client.post('/api/admin/start', json={"service": "test"})
             assert resp.status_code == 403
-            assert resp.get_json()["error"] == "csrf_validation_failed"
+            assert resp.get_json()["error"] == "csrf_failed"
 
     def test_csrf_enabled_accepts_with_valid_token(self, csrf_app):
         """Avec CSRF active et token valide → 200."""
