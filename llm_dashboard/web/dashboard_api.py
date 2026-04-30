@@ -30,7 +30,9 @@ class DashboardAPIRoute:
                  find_llama_process: Callable[[], dict | None],
                  logger: logging.Logger | None = None,
                  get_ollama_models: Callable[[], list] | None = None,
-                 get_llama_metrics: Callable[[], dict] | None = None):
+                 get_llama_metrics: Callable[[], dict] | None = None,
+                 get_gpu_processes: Callable[[], list] | None = None):
+        ...
         self._config = config
         self._get_cpu = get_cpu_info
         self._get_ram = get_ram_info
@@ -47,6 +49,7 @@ class DashboardAPIRoute:
         self._logger = logger or logging.getLogger("dashboard-llm")
         self._get_ollama_models = get_ollama_models or (lambda: [])
         self._get_llama_metrics = get_llama_metrics or (lambda: {})
+        self._get_gpu_processes = get_gpu_processes
 
     def register(self, app: Flask) -> None:
         config = self._config
@@ -174,4 +177,44 @@ class DashboardAPIRoute:
                 'model_on_8080': services_payload.get('model_on_8080'),
                 'ollama_models': get_ollama(),
                 'llama_metrics': get_llama_met(),
+                'gpu_processes': _get_gpu_processes_payload(),
+                'gpu_process_count': len(_get_gpu_processes_payload()),
+                'gpu_process_vram_total_mib': sum(p.get('used_vram_mib', 0) for p in _get_gpu_processes_payload()),
             })
+
+        def _get_gpu_processes_payload():
+            gp_config = config.get("gpu_processes", {})
+            if not gp_config.get("enable", True):
+                return []
+            try:
+                if not self._get_gpu_processes:
+                    return []
+                show_cmd = gp_config.get("show_command", True)
+                max_procs = gp_config.get("max_processes", 100)
+                raw = self._get_gpu_processes()
+                # If raw returns dicts with show_command support, use that
+                # Otherwise filter command client-side
+                processes = []
+                for p in raw:
+                    entry = dict(p)
+                    if not show_cmd:
+                        entry["command"] = None
+                    processes.append(entry)
+                if max_procs and len(processes) > max_procs:
+                    processes = processes[:max_procs]
+                return processes
+            except Exception as e:
+                logger.error("get_gpu_processes failed in /api/data: %s", e)
+                return []
+
+        def get_ollama():
+            try:
+                return self._get_ollama_models() if self._get_ollama_models else []
+            except Exception:
+                return []
+
+        def get_llama_met():
+            try:
+                return self._get_llama_metrics() if self._get_llama_metrics else {}
+            except Exception:
+                return {}

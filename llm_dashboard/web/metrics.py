@@ -131,8 +131,12 @@ def register_public_api(app, get_cpu_info, get_ram_info, get_gpu_info,
             "model": detect_model_name() or "unknown",
         })
 
+    @app.route('/api/v1/gpus/processes')
     @app.route('/api/v1/gpu/processes')
-    def public_gpu_processes():
+    def public_gpus_processes():
+        return public_gpu_processes_inner()
+
+    def public_gpu_processes_inner():
         processes = []
         if callable(get_gpu_processes):
             try:
