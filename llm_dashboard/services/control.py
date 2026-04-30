@@ -300,19 +300,5 @@ class ServiceController:
 
 
 
-def _process_vram_mib(proc: dict) -> float:
-    """Extrait la VRAM d'un dict processus (nouveau ou ancien schema)."""
-    try:
-        return float(proc.get("used_vram_mib", proc.get("vram_mib", 0)) or 0)
-    except (TypeError, ValueError):
-        return 0.0
-
-
-def _process_display_name(proc: dict) -> str:
-    """Extrait le nom affichable d'un processus (nouveau ou ancien schema)."""
-    return (
-        proc.get("process_name")
-        or proc.get("name")
-        or f"pid-{proc.get('pid', '?')}"
-    )
+from llm_dashboard.monitors.gpu.processes import process_vram_mib as _process_vram_mib
 

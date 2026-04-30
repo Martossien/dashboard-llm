@@ -45,38 +45,44 @@ class GPUProcess:
         }
 
 
-def guess_gpu_process_service(process_name: Optional[str], command: Optional[str]) -> Optional[str]:
+def guess_gpu_process_service(process_name: Optional[str], command: Optional[str]) -> str:
     """Devine le service auquel appartient un processus GPU.
 
     Heuristiques basees sur le nom du processus et sa ligne de commande.
 
     Returns:
-        "vllm", "ollama", "llama_cpp", "ik_llama_cpp", "python", "unknown", ou None.
+        "ik_llama_cpp", "vllm", "ollama", "llama_cpp", "python", ou "unknown".
     """
     name_lower = (process_name or "").lower()
     cmd_lower = (command or "").lower()
     combined = f"{name_lower} {cmd_lower}"
 
-    # ik_llama avant llama (pour eviter faux match)
+    # ik_llama avant llama et vllm (pour eviter faux match)
     if "ik_llama" in combined:
         return "ik_llama_cpp"
 
-    if "llama-server" in combined or "llama.cpp" in combined:
-        return "llama_cpp"
-
-    if "vllm" in combined or "api_server" in cmd_lower or "vllm.entrypoints" in cmd_lower:
+    # vllm avant llama_cpp (vllm.entrypoints, api_server)
+    if "vllm" in combined or "vllm.entrypoints" in cmd_lower or "api_server" in cmd_lower:
         return "vllm"
 
     if "ollama" in combined:
         return "ollama"
 
+    if "llama-server" in combined or "llama.cpp" in combined:
+        return "llama_cpp"
+
     if "python" in name_lower:
         return "python"
 
-    if process_name and process_name != "unknown":
-        return "unknown"
+    return "unknown"
 
-    return None
+
+def process_vram_mib(proc: dict) -> float:
+    """Extrait la VRAM d'un dict processus (nouveau ou ancien schema)."""
+    try:
+        return float(proc.get("used_vram_mib", proc.get("vram_mib", 0)) or 0)
+    except (TypeError, ValueError):
+        return 0.0
 
 
 def normalize_gpu_process_dict(raw: dict, show_command: bool = True) -> dict:
