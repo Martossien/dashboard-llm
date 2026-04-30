@@ -50,6 +50,19 @@ class AdminAPIRoutes:
         logger = self._logger
         _log_action = self._log_action
 
+        def _check_csrf():
+            csrf_enabled = config.get("admin", {}).get("csrf_enabled", False)
+            if not csrf_enabled:
+                return True
+            csrf_header = config.get("admin", {}).get("csrf_header", "X-CSRF-Token")
+            token = request.headers.get(csrf_header, "")
+            from flask import session
+            expected = session.get("csrf_token", "")
+            if not token or token != expected:
+                logger.warning("CSRF validation failed from %s", request.remote_addr or "unknown")
+                return False
+            return True
+
         @app.route('/api/admin/status')
         def api_admin_status():
             if not login_required():
@@ -80,6 +93,8 @@ class AdminAPIRoutes:
             if not login_required():
                 logger.warning("Unauthorized admin API /api/admin/restart from %s", client_ip)
                 return jsonify({"error": "unauthorized"}), 401
+            if not _check_csrf():
+                return jsonify({"error": "csrf_validation_failed"}), 403
             data = request.get_json(silent=True) or {}
             key = data.get("service")
             if not key:
@@ -105,6 +120,8 @@ class AdminAPIRoutes:
             if not login_required():
                 logger.warning("Unauthorized admin API /api/admin/start from %s", client_ip)
                 return jsonify({"error": "unauthorized"}), 401
+            if not _check_csrf():
+                return jsonify({"error": "csrf_validation_failed"}), 403
             data = request.get_json(silent=True) or {}
             key = data.get("service")
             if not key:
@@ -121,6 +138,8 @@ class AdminAPIRoutes:
             if not login_required():
                 logger.warning("Unauthorized admin API /api/admin/stop from %s", client_ip)
                 return jsonify({"error": "unauthorized"}), 401
+            if not _check_csrf():
+                return jsonify({"error": "csrf_validation_failed"}), 403
             data = request.get_json(silent=True) or {}
             key = data.get("service")
             if not key:
@@ -137,6 +156,8 @@ class AdminAPIRoutes:
             if not login_required():
                 logger.warning("Unauthorized admin API /api/admin/force_stop from %s", client_ip)
                 return jsonify({"error": "unauthorized"}), 401
+            if not _check_csrf():
+                return jsonify({"error": "csrf_validation_failed"}), 403
             data = request.get_json(silent=True) or {}
             key = data.get("service")
             if not key:
@@ -155,6 +176,8 @@ class AdminAPIRoutes:
                 logger.warning("Unauthorized admin API /api/admin/stop_all_llm from %s",
                                client_ip)
                 return jsonify({"error": "unauthorized"}), 401
+            if not _check_csrf():
+                return jsonify({"error": "csrf_validation_failed"}), 403
             logger.info("Admin STOP_ALL_LLM requested from %s", client_ip)
             results = stop_all_llm()
             logger.info("Admin STOP_ALL_LLM result: %d services stopped", len(results))
