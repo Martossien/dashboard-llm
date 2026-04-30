@@ -16,7 +16,9 @@ Utilisation:
 from __future__ import annotations
 
 import logging
+import os
 import re
+import signal as _signal
 import subprocess
 from dataclasses import dataclass, field
 
@@ -209,6 +211,30 @@ class CommandRunner:
         """Valide un nombre de lignes."""
         if not isinstance(lines, int) or not (1 <= lines <= 2000):
             raise ValueError(f"Invalid lines count: {lines}. Must be between 1 and 2000.")
+
+    def _validate_pid(self, pid: int) -> None:
+        """Valide un PID de processus."""
+        if not isinstance(pid, int) or pid < 1:
+            raise ValueError(f"Invalid PID: {pid}. Must be a positive integer.")
+
+    def kill_pid(self, pid: int, signal: str = "TERM") -> None:
+        """Envoie un signal a un processus par PID.
+
+        Args:
+            pid: identifiant du processus cible
+            signal: 'TERM' ou 'KILL'
+
+        Raises:
+            ValueError: si le PID ou le signal est invalide
+            ProcessLookupError: si le processus n'existe pas
+            PermissionError: si les droits sont insuffisants
+        """
+        self._validate_pid(pid)
+        self._validate_signal(signal)
+        sig = getattr(_signal, f"SIG{signal}")
+        logger.info("kill_pid: sending SIG%s to PID %d", signal, pid)
+        os.kill(pid, sig)
+        logger.info("kill_pid: SIG%s sent to PID %d", signal, pid)
 
     # ---- Execution ----
 

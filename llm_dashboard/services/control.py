@@ -8,7 +8,6 @@ toutes les commandes systeme. Respecte admin.allow_force_stop.
 from __future__ import annotations
 
 import logging
-import os
 import time
 from dataclasses import dataclass, field
 
@@ -234,9 +233,8 @@ class ServiceController:
         if signal_name not in ("TERM", "KILL"):
             raise ValueError(f"Invalid signal: {signal_name}")
 
-        sig = 15 if signal_name == "TERM" else 9
         try:
-            os.kill(pid, sig)
+            self.runner.kill_pid(pid, signal_name)
             logger.info("Sent SIG%s to PID %d", signal_name, pid)
             return True
         except ProcessLookupError:

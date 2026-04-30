@@ -28,7 +28,7 @@ LLAMA_NOISE_PATTERNS = [
 ANSI_ESCAPE = re.compile(r'\x1b\[[0-9;?]*[a-zA-Z]|\x1b\].*?\x07')
 
 
-def tail_log_lines(log_file, max_lines, block_size):
+def tail_log_lines(log_file: str, max_lines: int, block_size: int) -> list[str]:
     """Lit les dernieres lignes d'un fichier de log, avec filtrage ANSI et bruit.
 
     Args:
@@ -66,7 +66,7 @@ def tail_log_lines(log_file, max_lines, block_size):
     return list(lines)
 
 
-def read_journalctl_logs(unit, max_lines):
+def read_journalctl_logs(unit: str, max_lines: int) -> list[str]:
     """Lit les logs d'un service systemd via journalctl (CommandRunner).
 
     Args:
@@ -89,7 +89,7 @@ def read_journalctl_logs(unit, max_lines):
         return []
 
 
-def _get_active_llama_log_file(config, command_runner):
+def _get_active_llama_log_file(config: dict, command_runner) -> str:
     if not check_port_is_open("127.0.0.1", 8080, timeout=1):
         return config["services"]["ik_llama_cpp"].get("log_file", "/var/log/launch_llm.log")
     if find_ik_llama_process() is not None:
@@ -116,7 +116,7 @@ def _get_active_llama_log_file(config, command_runner):
     return config["services"]["ik_llama_cpp"].get("log_file", "/var/log/launch_llm.log")
 
 
-def get_logs(config, command_runner):
+def get_logs(config: dict, command_runner) -> dict:
     max_lines = config["monitoring"]["log_lines"]
     log_block_bytes = config["monitoring"]["log_block_bytes"]
     service_logs = {}
@@ -154,7 +154,7 @@ def get_logs(config, command_runner):
     return service_logs
 
 
-def get_client_ips(config):
+def get_client_ips(config: dict) -> list[str]:
     log_file = config["monitoring"].get("log_file", "/var/log/launch_llm.log")
     if not os.path.exists(log_file):
         return []

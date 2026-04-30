@@ -20,6 +20,8 @@ from llm_dashboard.services.detection import (
     get_llama_status as _get_llama_status_fn,
     get_services_status as _get_services_status_fn,
     get_admin_services_status as _get_admin_services_status_fn,
+)
+from llm_dashboard.services.metrics import (
     get_ollama_models as _get_ollama_models_fn,
     get_llama_metrics as _get_llama_metrics_fn,
 )

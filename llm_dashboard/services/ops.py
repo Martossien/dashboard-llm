@@ -5,8 +5,6 @@ Extrait de monitor.py (Lot 20, Savepoint G).
 """
 
 import logging
-import os
-import signal as _signal
 import time
 
 from llm_dashboard.services.health import check_port_is_open
@@ -15,7 +13,7 @@ from llm_dashboard.services.detection import get_admin_services_status
 _logger = logging.getLogger("dashboard-llm.ops")
 
 
-def _check_port_free(port, timeout=10):
+def _check_port_free(port: int, timeout: int = 10) -> bool:
     for _ in range(timeout):
         if not check_port_is_open("127.0.0.1", port, timeout=1):
             return True
@@ -23,7 +21,7 @@ def _check_port_free(port, timeout=10):
     return False
 
 
-def _run_cmd(command_runner, cmd, timeout=5):
+def _run_cmd(command_runner, cmd: list, timeout: int = 5) -> tuple[str, str, int]:
     try:
         cmd = list(cmd)
         result = None
@@ -48,7 +46,7 @@ def _run_cmd(command_runner, cmd, timeout=5):
         return "", str(e), -1
 
 
-def _kill_gpu_processes(gpu_monitor, kill_vram_threshold_mib=100, sigkill_after=5):
+def _kill_gpu_processes(gpu_monitor, command_runner, kill_vram_threshold_mib: int = 100, sigkill_after: int = 5) -> list[int]:
     try:
         processes = gpu_monitor.gpu_processes()
     except Exception as exc:
@@ -62,7 +60,7 @@ def _kill_gpu_processes(gpu_monitor, kill_vram_threshold_mib=100, sigkill_after=
     pids_killed = []
     for p in big_procs:
         try:
-            os.kill(p["pid"], _signal.SIGTERM)
+            command_runner.kill_pid(p["pid"], "TERM")
             _logger.info("  SIGTERM -> PID %d (%s, %.0f MiB)", p["pid"], p.get("name", "?"), p.get("vram_mib", 0))
             pids_killed.append(p["pid"])
         except (ProcessLookupError, PermissionError) as e:
@@ -76,7 +74,7 @@ def _kill_gpu_processes(gpu_monitor, kill_vram_threshold_mib=100, sigkill_after=
     if survivor_pids:
         for pid in survivor_pids:
             try:
-                os.kill(pid, _signal.SIGKILL)
+                command_runner.kill_pid(pid, "KILL")
                 _logger.info("  SIGKILL -> PID %d", pid)
             except (ProcessLookupError, PermissionError) as e:
                 _logger.warning("  Cannot SIGKILL PID %d: %s", pid, e)
@@ -85,7 +83,7 @@ def _kill_gpu_processes(gpu_monitor, kill_vram_threshold_mib=100, sigkill_after=
     return pids_killed
 
 
-def _get_running_llm_key_on_8080(config, command_runner):
+def _get_running_llm_key_on_8080(config: dict, command_runner) -> str | None:
     status = get_admin_services_status(config, command_runner)
     for key, svc in status.items():
         if svc.get("is_llm") and svc.get("port") == 8080 and svc.get("running"):
@@ -93,7 +91,7 @@ def _get_running_llm_key_on_8080(config, command_runner):
     return None
 
 
-def do_start_service(config, command_runner, gpu_monitor, key):
+def do_start_service(config: dict, command_runner, gpu_monitor, key: str) -> dict:
     all_conf = config.get("start_stop", {})
     if key not in all_conf:
         return {"success": False, "message": "Service inconnu: {}".format(key)}
@@ -123,7 +121,7 @@ def do_start_service(config, command_runner, gpu_monitor, key):
     return {"success": True, "message": "Service {} demarre.".format(key)}
 
 
-def do_stop_service(config, command_runner, gpu_monitor, key):
+def do_stop_service(config: dict, command_runner, gpu_monitor, key: str) -> dict:
     all_conf = config.get("start_stop", {})
     if key not in all_conf:
         return {"success": False, "message": "Service inconnu: {}".format(key)}
@@ -165,7 +163,7 @@ def do_stop_service(config, command_runner, gpu_monitor, key):
                 time.sleep(2)
     if is_llm and gpu_monitor:
         _logger.info("do_stop_service(%s): kill_gpu_processes...", key)
-        killed = _kill_gpu_processes(gpu_monitor, kill_vram_threshold_mib=500, sigkill_after=5)
+        killed = _kill_gpu_processes(gpu_monitor, command_runner, kill_vram_threshold_mib=500, sigkill_after=5)
         if killed:
             _logger.info("do_stop_service(%s): %d processus GPU tus.", key, len(killed))
             time.sleep(2)
@@ -175,7 +173,7 @@ def do_stop_service(config, command_runner, gpu_monitor, key):
     return {"success": True, "message": "Service {} arrete.".format(key)}
 
 
-def stop_all_llm_engines(config, command_runner, gpu_monitor):
+def stop_all_llm_engines(config: dict, command_runner, gpu_monitor) -> list[dict]:
     results = []
     status = get_admin_services_status(config, command_runner)
     for key, svc in status.items():
@@ -197,7 +195,7 @@ def stop_all_llm_engines(config, command_runner, gpu_monitor):
             pass
         time.sleep(3)
     if gpu_monitor:
-        killed = _kill_gpu_processes(gpu_monitor, kill_vram_threshold_mib=500, sigkill_after=5)
+        killed = _kill_gpu_processes(gpu_monitor, command_runner, kill_vram_threshold_mib=500, sigkill_after=5)
         if killed:
             _logger.info("stop_all_llm_engines: %d processus GPU residuels tus.", len(killed))
     time.sleep(2)

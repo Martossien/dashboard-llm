@@ -2,6 +2,8 @@
 Service detection — identification du modele actif et du service sur un port.
 """
 
+from __future__ import annotations
+
 import logging
 import os as _os
 import psutil as _psutil
@@ -46,7 +48,7 @@ def guess_service_from_model(
     return None
 
 
-def find_ik_llama_process():
+def find_ik_llama_process() -> dict | None:
     try:
         for proc in _psutil.process_iter(['pid', 'name', 'cmdline', 'create_time']):
             cmdline = proc.info.get('cmdline') or []
@@ -58,7 +60,7 @@ def find_ik_llama_process():
     return None
 
 
-def find_llama_process():
+def find_llama_process() -> dict | None:
     try:
         for proc in _psutil.process_iter(['pid', 'name', 'cmdline', 'create_time']):
             cmdline = proc.info.get('cmdline') or []
@@ -70,7 +72,7 @@ def find_llama_process():
     return None
 
 
-def find_vllm_process():
+def find_vllm_process() -> dict | None:
     try:
         if _os.path.exists("/root/.vllm_qwen36_27b.pid"):
             with open("/root/.vllm_qwen36_27b.pid", "r") as f:
@@ -88,7 +90,7 @@ def find_vllm_process():
     return None
 
 
-def detect_model_name(config, model_cache):
+def detect_model_name(config: dict, model_cache: dict) -> str:
     """Detecte le nom du modele actif. Prend config et model_cache en parametres."""
     model_name = None
     now = _time.time()
@@ -164,7 +166,7 @@ def detect_model_name(config, model_cache):
     return 'Unknown'
 
 
-def _get_active_llama_key(config, command_runner):
+def _get_active_llama_key(config: dict, command_runner) -> str:
     try:
         url = join_url(
             config["services"]["llama_cpp"]["base_url"],
@@ -196,7 +198,7 @@ def _get_active_llama_key(config, command_runner):
     return 'llama_cpp'
 
 
-def get_llama_status(config, command_runner):
+def get_llama_status(config: dict, command_runner) -> tuple[str, float | None, int | None, int | None]:
     status = 'DOWN'
     latency = None
     slots_active = None
@@ -223,7 +225,7 @@ def get_llama_status(config, command_runner):
     return status, latency, slots_active, slots_total
 
 
-def get_services_status(config, command_runner):
+def get_services_status(config: dict, command_runner) -> dict:
     port_8080_status, port_8080_latency, slots_active, slots_total = get_llama_status(config, command_runner)
     model_on_8080 = None
     active_on_8080 = None
@@ -322,7 +324,7 @@ def get_services_status(config, command_runner):
     }
 
 
-def check_service_is_running(svc_conf, command_runner):
+def check_service_is_running(svc_conf: dict, command_runner) -> bool:
     cmd = svc_conf.get("service_check", ["systemctl", "is-active", "unknown.service"])
     try:
         if len(cmd) >= 3 and cmd[0] == "systemctl" and cmd[1] == "is-active":
@@ -344,7 +346,7 @@ def check_service_is_running(svc_conf, command_runner):
     return False
 
 
-def get_admin_services_status(config, command_runner):
+def get_admin_services_status(config: dict, command_runner) -> dict:
     try:
         s = get_services_status(config, command_runner)
     except Exception as exc:
@@ -384,46 +386,4 @@ def get_admin_services_status(config, command_runner):
     return status
 
 
-def get_ollama_models(config):
-    svc = config.get("services", {}).get("ollama", {})
-    if not svc.get("base_url"):
-        return []
-    url = join_url(svc["base_url"], "/api/tags")
-    timeout = svc.get("timeout_seconds", 3)
-    try:
-        resp = _requests.get(url, timeout=timeout)
-        if resp.status_code == 200:
-            return resp.json().get("models", [])
-    except Exception:
-        pass
-    return []
 
-
-def _parse_prometheus_metrics(text):
-    result = {}
-    for line in text.splitlines():
-        stripped = line.strip()
-        if stripped.startswith("#") or not stripped:
-            continue
-        parts = stripped.rsplit(" ", 1)
-        if len(parts) == 2:
-            key = parts[0].split("{")[0].strip()
-            try:
-                result[key] = float(parts[1])
-            except ValueError:
-                pass
-    return result
-
-
-def get_llama_metrics(config):
-    svc = config.get("services", {}).get("ik_llama_cpp", {})
-    if not svc.get("base_url"):
-        return {}
-    url = join_url(svc["base_url"], "/metrics")
-    try:
-        resp = _requests.get(url, timeout=2)
-        if resp.status_code == 200:
-            return _parse_prometheus_metrics(resp.text)
-    except Exception:
-        pass
-    return {}

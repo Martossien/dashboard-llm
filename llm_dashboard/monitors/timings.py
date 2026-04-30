@@ -26,7 +26,7 @@ VLLM_TIMINGS = {
 }
 
 
-def extract_llama_timings(log_file, max_lines=50, block_size=8192):
+def extract_llama_timings(log_file: str, max_lines: int = 50, block_size: int = 8192) -> tuple[float | None, float | None]:
     """Extrait les debits de tokens (prompt/generation) depuis un log llama.cpp.
 
     Args:
@@ -102,7 +102,7 @@ def extract_llama_timings(log_file, max_lines=50, block_size=8192):
     return LLAMA_TIMINGS["prompt_tokens_per_second"], LLAMA_TIMINGS["generation_tokens_per_second"]
 
 
-def extract_vllm_timings(log_file, max_lines=50, block_size=8192):
+def extract_vllm_timings(log_file: str, max_lines: int = 50, block_size: int = 8192) -> tuple[float | None, float | None]:
     """Extrait les debits de tokens depuis un log vLLM.
 
     Format attendu:
@@ -148,7 +148,7 @@ def extract_vllm_timings(log_file, max_lines=50, block_size=8192):
     return VLLM_TIMINGS["prompt_tokens_per_second"], VLLM_TIMINGS["generation_tokens_per_second"]
 
 
-def _cache_timings(prompt_rate, generation_rate, cache_dict):
+def _cache_timings(prompt_rate: float | None, generation_rate: float | None, cache_dict: dict) -> None:
     """Met a jour le cache de debits."""
     if prompt_rate is not None:
         cache_dict["prompt_tokens_per_second"] = prompt_rate
@@ -158,11 +158,11 @@ def _cache_timings(prompt_rate, generation_rate, cache_dict):
         cache_dict["last_update"] = time.time()
 
 
-def get_llama_timings(config, get_log_file_fn):
+def get_llama_timings(config: dict, get_log_file_fn) -> tuple[float | None, float | None]:
     log_file = get_log_file_fn()
     return extract_llama_timings(log_file, config["monitoring"]["log_lines"], config["monitoring"]["log_block_bytes"])
 
 
-def get_vllm_timings(config):
+def get_vllm_timings(config: dict) -> tuple[float | None, float | None]:
     log_file = config["services"]["vllm"].get("log_file", "/var/log/vllm_qwen36_27b.log")
     return extract_vllm_timings(log_file, config["monitoring"]["log_lines"], config["monitoring"]["log_block_bytes"])

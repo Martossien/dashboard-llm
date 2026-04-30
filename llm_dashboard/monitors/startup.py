@@ -18,7 +18,7 @@ LOAD_STATS = {"durations_seconds": [], "avg_seconds": None}
 LLAMA_STARTUP = {"pid": None, "start_time": None, "ready_recorded": False}
 
 
-def load_startup_stats():
+def load_startup_stats() -> None:
     try:
         if os.path.exists(LOAD_STATS_PATH):
             with open(LOAD_STATS_PATH, "r", encoding="utf-8") as handle:
@@ -34,7 +34,7 @@ def load_startup_stats():
         logger.debug("Failed to load startup stats: %s", exc)
 
 
-def save_startup_stats():
+def save_startup_stats() -> None:
     try:
         payload = {
             "durations_seconds": LOAD_STATS.get("durations_seconds", []),
@@ -46,7 +46,7 @@ def save_startup_stats():
         logger.debug("Failed to save startup stats: %s", exc)
 
 
-def record_startup_duration(duration_seconds):
+def record_startup_duration(duration_seconds: float) -> None:
     if duration_seconds <= 0:
         return
     durations = LOAD_STATS.get("durations_seconds", [])
@@ -60,7 +60,7 @@ def record_startup_duration(duration_seconds):
 load_startup_stats()
 
 
-def get_llama_startup_state(llama_status):
+def get_llama_startup_state(llama_status: str | None) -> dict:
     proc = find_llama_process()
     now = time.time()
     if not proc:

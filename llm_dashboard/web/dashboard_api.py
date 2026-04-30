@@ -4,22 +4,33 @@ Dashboard API route — /api/data.
 Pas d'import depuis monitor.py.
 """
 
-import logging
+from __future__ import annotations
 
-from flask import jsonify
+import logging
+from typing import Callable
+
+from flask import Flask, jsonify
 
 
 class DashboardAPIRoute:
     """Route /api/data — endpoint JSON principal du dashboard."""
 
-    def __init__(self, config,
-                 get_cpu_info, get_ram_info, get_gpu_info,
-                 get_services_status, get_llama_startup_state,
-                 get_llama_timings, get_vllm_timings,
-                 get_logs, get_client_ips, detect_model_name,
-                 find_ik_llama_process, find_llama_process,
-                 logger=None,
-                 get_ollama_models=None, get_llama_metrics=None):
+    def __init__(self, config: dict,
+                 get_cpu_info: Callable[[], dict],
+                 get_ram_info: Callable[[], dict],
+                 get_gpu_info: Callable[[], list],
+                 get_services_status: Callable[[], dict],
+                 get_llama_startup_state: Callable[[str | None], dict],
+                 get_llama_timings: Callable[[], tuple],
+                 get_vllm_timings: Callable[[], tuple],
+                 get_logs: Callable[[], dict],
+                 get_client_ips: Callable[[], list],
+                 detect_model_name: Callable[[], str],
+                 find_ik_llama_process: Callable[[], dict | None],
+                 find_llama_process: Callable[[], dict | None],
+                 logger: logging.Logger | None = None,
+                 get_ollama_models: Callable[[], list] | None = None,
+                 get_llama_metrics: Callable[[], dict] | None = None):
         self._config = config
         self._get_cpu = get_cpu_info
         self._get_ram = get_ram_info
@@ -37,7 +48,7 @@ class DashboardAPIRoute:
         self._get_ollama_models = get_ollama_models or (lambda: [])
         self._get_llama_metrics = get_llama_metrics or (lambda: {})
 
-    def register(self, app):
+    def register(self, app: Flask) -> None:
         config = self._config
         get_cpu = self._get_cpu
         get_ram = self._get_ram
