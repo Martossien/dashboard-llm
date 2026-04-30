@@ -162,17 +162,23 @@ def register_public_api(app, get_cpu_info, get_ram_info, get_gpu_info,
         return public_gpu_processes_inner()
 
     def public_gpu_processes_inner():
+        gp_config = config.get("gpu_processes", {})
+        if not gp_config.get("enable", True):
+            return jsonify({"processes": [], "count": 0, "total_vram_mib": 0, "enabled": False})
         processes = []
         if callable(get_gpu_processes):
             try:
                 raw = get_gpu_processes()
+                show_cmd = gp_config.get("show_command", True)
                 for p in raw:
                     entry = dict(p)
+                    if not show_cmd:
+                        entry["command"] = None
                     processes.append(entry)
-            except Exception:
-                pass
+            except Exception as exc:
+                import logging
+                logging.getLogger("dashboard-llm").warning("get_gpu_processes failed: %s", exc)
 
-        # Sort by VRAM usage descending (like nvitop/gpustat)
         processes.sort(key=lambda p: p.get("used_vram_mib", p.get("vram_mib", 0)), reverse=True)
 
         return jsonify({

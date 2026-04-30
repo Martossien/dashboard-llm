@@ -355,7 +355,7 @@
 
             if (!section || !tbody) return;
             if (!processes.length) {
-                section.style.display = count > 0 ? '' : 'none';
+                section.style.display = '';
                 tbody.textContent = '';
                 const row = document.createElement('tr');
                 const cell = document.createElement('td');
@@ -363,7 +363,7 @@
                 cell.textContent = 'No GPU processes detected';
                 row.appendChild(cell);
                 tbody.appendChild(row);
-                if (summary) summary.textContent = '';
+                if (summary) summary.textContent = '0 process — 0 MiB VRAM';
                 return;
             }
 

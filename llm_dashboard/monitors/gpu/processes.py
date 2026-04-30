@@ -22,7 +22,7 @@ class GPUProcess:
     gpu_index: Optional[int] = None
     username: Optional[str] = None
     command: Optional[str] = None
-    service_guess: Optional[str] = None
+    service_guess: str = "unknown"
     backend: str = "unknown"
     gpu_uuid: Optional[str] = None
 
@@ -109,13 +109,27 @@ def normalize_gpu_process_dict(raw: dict, show_command: bool = True) -> dict:
         service_guess = guess_gpu_process_service(process_name, command)
 
     return {
-        "pid": int(pid),
-        "gpu_index": gpu_index,
+        "pid": _safe_int(pid),
+        "gpu_index": gpu_index if isinstance(gpu_index, int) else None,
         "process_name": process_name,
-        "used_vram_mib": float(used_vram),
+        "used_vram_mib": _safe_float(used_vram),
         "username": username,
         "command": command if show_command else None,
-        "service_guess": service_guess,
+        "service_guess": service_guess or "unknown",
         "backend": backend,
         "gpu_uuid": gpu_uuid,
     }
+
+
+def _safe_int(value, default=0) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _safe_float(value, default=0.0) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
