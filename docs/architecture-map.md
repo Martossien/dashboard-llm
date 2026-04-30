@@ -1,4 +1,29 @@
-# Architecture Map — dashboard-llm
+# Architecture Map — dashboard-llm (Updated post-refactor)
+
+**Dernière mise à jour** : 2026-04-30
+
+## Flux de création de l'application
+
+```
+cli.py / monitor.py
+  → app_factory.create_full_app(config_path, setup_signals)
+    → load_config()
+    → CommandRunner()
+    → GPUMonitor()  (→ NvidiaBackend or NoGPUBackend)
+    → partials (detection, logs, timings, ops)
+    → create_app()  (→ Flask + WebRoutes)
+    → wiring routes (AdminAuth, AdminPanel, AdminAPI, DashboardAPI, register_public_api)
+    → signal handlers (if setup_signals=True)
+    → return (app, config)
+```
+
+## monitor.py — rôle actuel
+
+Compatibility wrapper (92 lignes, était 218) :
+- Appelle `create_full_app()` et expose `app` et `CONFIG` comme globals
+- Re-exporte `load_config`, `validate_config`, `DEFAULT_CONFIG`, etc. pour compatibilité des tests
+- Re-crée quelques partials pour compatibilité (`get_services_status`, etc.)
+- `if __name__ == '__main__'` lance le serveur
 
 ## Modules Web (llm_dashboard/web/)
 | Fichier | Classe/Fonction | Rôle |
