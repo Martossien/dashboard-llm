@@ -295,36 +295,3 @@ class ServiceController:
         logger.info("_kill_gpu_processes: done. %d PIDs killed.", len(pids_killed))
         return pids_killed
 
-
-def check_service_is_running(svc_conf):
-    """Verifie si le service est actif (systemd, puis fallback health check)."""
-    cmd = svc_conf.get("service_check", ["systemctl", "is-active", "unknown.service"])
-    stdout, stderr, rc = run_subprocess_check_output(cmd, timeout=3)
-    if stdout == "active" or stdout == "activating":
-        return True
-    # Fallback: vérification via health check sur le port
-    url = svc_conf.get("base_url", None)
-    timeout = svc_conf.get("timeout_seconds", 2)
-    endpoint = svc_conf.get("health_endpoint", "/")
-    if url:
-        status, _ = check_service_health(url, endpoint, min(timeout, 2))
-        if status == "UP":
-            return True
-    port = svc_conf.get("port", 0)
-    if port and check_port_is_open("127.0.0.1", port, timeout=1):
-        return True
-    return False
-
-def kill_gpu_processes(kill_vram_threshold_mib=100, sigkill_after=5):
-    """Tue les processus GPU qui consomment plus de kill_vram_threshold_mib de VRAM.
-    Envoie d'abord SIGTERM, attend sigkill_after secondes, puis SIGKILL les survivants.
-    Retourne la liste des PIDs tus.
-    """
-    ctrl = _init_controller()
-    if not ctrl.allow_force_stop:
-        logger.warning("kill_gpu_processes refuse: admin.allow_force_stop est desactive.")
-        return []
-    return ctrl._kill_gpu_processes(
-        threshold_mib=kill_vram_threshold_mib,
-        sigkill_after=sigkill_after,
-    )

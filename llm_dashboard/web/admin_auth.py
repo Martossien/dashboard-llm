@@ -73,18 +73,3 @@ class AdminAuthRoutes:
             return redirect(url_for('index'))
 
 
-def admin_login_required():
-    """Retourne True si l'utilisateur est connecte."""
-    if not CONFIG.get("admin", {}).get("enabled", True):
-        return True
-    return session.get("admin_logged_in") is True
-
-def check_admin_password(password):
-    """Verifie le mot de passe admin contre le hash configure."""
-    default_hash = "pbkdf2:sha256:260000$ndkvw7ryKFNx99Am$b8f6b66a2f536fa1010bb72c3b7c48cb4b8e82c7a05be16401cc37ca2a95f90c"
-    expected_hash = CONFIG.get("admin", {}).get("password_hash", default_hash)
-    import werkzeug.security
-    if not expected_hash.startswith("pbkdf2:"):
-        logger.warning("admin.password_hash is not a pbkdf2 hash — refusing plaintext comparison. Run /opt/dashboard-llm/change_admin_password.py to set a proper hash.")
-        return False
-    return werkzeug.security.check_password_hash(expected_hash, str(password))
