@@ -12,7 +12,8 @@ def _escape_label(value) -> str:
 
 
 def create_metrics_endpoint(get_cpu_info, get_ram_info, get_gpu_info,
-                            get_services_status, detect_model_name):
+                            get_services_status, detect_model_name,
+                            get_gpu_processes=None):
     """Cree une route /metrics au format Prometheus text."""
 
     def metrics():
@@ -66,6 +67,19 @@ def create_metrics_endpoint(get_cpu_info, get_ram_info, get_gpu_info,
         lines.append('# TYPE llm_model_info gauge')
         lines.append(f'llm_model_info{{model="{model}"}} 1')
 
+        # GPU Processes
+        if callable(get_gpu_processes):
+            lines.append('# HELP gpu_process_vram_mib GPU process VRAM usage in MiB')
+            lines.append('# TYPE gpu_process_vram_mib gauge')
+            try:
+                for p in get_gpu_processes():
+                    pid = _escape_label(str(p.get("pid", "?")))
+                    name = _escape_label(p.get("name", "unknown"))
+                    vram = p.get("vram_mib", 0)
+                    lines.append(f'gpu_process_vram_mib{{pid="{pid}",name="{name}"}} {vram}')
+            except Exception:
+                pass
+
         lines.append('')
         return Response('\n'.join(lines), mimetype='text/plain; version=0.0.4')
 
@@ -84,7 +98,8 @@ def register_public_api(app, get_cpu_info, get_ram_info, get_gpu_info,
     def metrics_route():
         return create_metrics_endpoint(
             get_cpu_info, get_ram_info, get_gpu_info,
-            get_services_status, detect_model_name
+            get_services_status, detect_model_name,
+            get_gpu_processes=get_gpu_processes,
         )()
 
     @app.route('/api/v1/gpus')
