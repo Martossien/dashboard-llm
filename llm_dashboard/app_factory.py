@@ -56,6 +56,7 @@ def register_routes(app, config: dict, deps: RuntimeDependencies) -> None:
         deps.stop_all_llm_engines,
         deps.create_controller, deps.control_result_to_dict,
         logger, audit_logger=audit_logger,
+        get_gpu_processes=deps.get_gpu_processes,
     )
     admin_api.register(app)
 
@@ -80,6 +81,7 @@ def register_routes(app, config: dict, deps: RuntimeDependencies) -> None:
         deps.detect_model_name, deps.get_logs,
         deps.get_llama_timings, deps.get_vllm_timings,
         config,
+        get_gpu_processes=deps.get_gpu_processes,
     )
 
 

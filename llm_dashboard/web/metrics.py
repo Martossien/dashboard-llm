@@ -75,8 +75,8 @@ def create_metrics_endpoint(get_cpu_info, get_ram_info, get_gpu_info,
 def register_public_api(app, get_cpu_info, get_ram_info, get_gpu_info,
                         get_services_status, detect_model_name,
                         get_logs, get_llama_timings, get_vllm_timings,
-                        config):
-    """Enregistre /metrics, /api/v1/gpus, /api/v1/services, /api/v1/metrics."""
+                        config, get_gpu_processes=None):
+    """Enregistre /metrics, /api/v1/gpus, /api/v1/services, /api/v1/metrics, /api/v1/gpu/processes."""
 
     _ = get_logs, get_llama_timings, get_vllm_timings  # unused for now
 
@@ -114,4 +114,33 @@ def register_public_api(app, get_cpu_info, get_ram_info, get_gpu_info,
             "gpus": gpus,
             "services": svc_status.get("services", {}),
             "model": detect_model_name() or "unknown",
+        })
+
+    @app.route('/api/v1/gpu/processes')
+    def public_gpu_processes():
+        processes = []
+        if callable(get_gpu_processes):
+            try:
+                raw = get_gpu_processes()
+                # Enrich with human-readable process name via psutil when available
+                for p in raw:
+                    entry = dict(p)
+                    try:
+                        import psutil
+                        proc = psutil.Process(p["pid"])
+                        entry["process_name"] = proc.name()
+                        entry["cmdline"] = " ".join(proc.cmdline()[:3])
+                    except Exception:
+                        entry["process_name"] = p.get("name", "unknown")
+                        entry["cmdline"] = ""
+                    processes.append(entry)
+            except Exception:
+                pass
+
+        # Sort by VRAM usage descending (like nvitop/gpustat)
+        processes.sort(key=lambda p: p.get("vram_mib", 0), reverse=True)
+
+        return jsonify({
+            "processes": processes,
+            "total_vram_mib": sum(p.get("vram_mib", 0) for p in processes),
         })

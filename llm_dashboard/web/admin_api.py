@@ -17,7 +17,8 @@ class AdminAPIRoutes:
                  get_admin_services_status, get_vram_status, get_logs,
                  do_start_service, do_stop_service, stop_all_llm_engines,
                  _init_controller,
-                 _control_result_to_dict, logger=None, audit_logger=None):
+                 _control_result_to_dict, logger=None, audit_logger=None,
+                 get_gpu_processes=None):
         self._config = config
         self._login_required = admin_login_required
         self._get_services = get_admin_services_status
@@ -30,6 +31,7 @@ class AdminAPIRoutes:
         self._result_to_dict = _control_result_to_dict
         self._logger = logger or logging.getLogger("dashboard-llm")
         self._audit = audit_logger
+        self._get_gpu_processes = get_gpu_processes
 
     def _log_action(self, action, service_key, result):
         if self._audit:
@@ -190,3 +192,16 @@ class AdminAPIRoutes:
                                request.remote_addr or "unknown")
                 return jsonify({"error": "unauthorized"}), 401
             return jsonify(get_vram())
+
+        @app.route('/api/admin/gpu/processes')
+        def api_admin_gpu_processes():
+            from flask import session
+            if not login_required():
+                return jsonify({"error": "unauthorized"}), 401
+            processes = []
+            if callable(self._get_gpu_processes):
+                try:
+                    processes = self._get_gpu_processes()
+                except Exception as exc:
+                    logger.warning("get_gpu_processes failed: %s", exc)
+            return jsonify({"processes": processes})

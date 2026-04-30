@@ -119,8 +119,8 @@ def create_runtime_dependencies(config: dict) -> RuntimeDependencies:
     gpu_monitor = GPUMonitor()
     model_cache = ModelCache()
 
-    # Partial: model detection
-    detect_model = partial(_detect_model_name, config, model_cache.to_dict())
+    # Partial: model detection (pass ModelCache dict for mutation)
+    detect_model = partial(_detect_model_name, config, model_cache.__dict__)
 
     # Partial: logs
     get_logs_fn = partial(_get_logs_fn, config, runner)
