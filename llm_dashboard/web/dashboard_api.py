@@ -11,6 +11,8 @@ from typing import Callable
 
 from flask import Flask, jsonify
 
+from llm_dashboard.monitors.gpu.processes import process_vram_mib
+
 
 class DashboardAPIRoute:
     """Route /api/data — endpoint JSON principal du dashboard."""
@@ -156,7 +158,6 @@ class DashboardAPIRoute:
             except Exception:
                 gpu_proc_payload = []
 
-            from llm_dashboard.monitors.gpu.processes import process_vram_mib
             return jsonify({
                 'cpu': get_cpu(), 'ram': get_ram(), 'gpus': get_gpu(),
                 'services': services_payload['services'],
@@ -189,7 +190,6 @@ class DashboardAPIRoute:
             })
 
         def _gpu_process_payload():
-            from llm_dashboard.monitors.gpu.processes import process_vram_mib
             gp_config = config.get("gpu_processes", {})
             if not gp_config.get("enable", True):
                 return []
