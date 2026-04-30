@@ -108,3 +108,21 @@ thresholds:
   vram_danger_percent: 90
   power_warning_percent: 70
   power_danger_percent: 90
+
+admin:
+  # Set to false to disable admin authentication entirely.
+  enabled: true
+  # Allow force-stop (fuser -k and GPU process kill).
+  allow_force_stop: true
+  # Enable CSRF protection on admin POST routes.
+  csrf_enabled: true
+  # Custom CSRF header name.
+  csrf_header: "X-CSRF-Token"
+
+gpu_processes:
+  # Enable GPU process collection and display.
+  enable: true
+  # Show full command line in the process viewer.
+  show_command: true
+  # Maximum number of processes to return.
+  max_processes: 100
