@@ -157,17 +157,8 @@ def register_public_api(app, get_cpu_info, get_ram_info, get_gpu_info,
         if callable(get_gpu_processes):
             try:
                 raw = get_gpu_processes()
-                # Enrich with human-readable process name via psutil when available
                 for p in raw:
                     entry = dict(p)
-                    try:
-                        import psutil
-                        proc = psutil.Process(p["pid"])
-                        entry["process_name"] = proc.name()
-                        entry["cmdline"] = " ".join(proc.cmdline()[:3])
-                    except Exception:
-                        entry["process_name"] = p.get("name", "unknown")
-                        entry["cmdline"] = ""
                     processes.append(entry)
             except Exception:
                 pass
