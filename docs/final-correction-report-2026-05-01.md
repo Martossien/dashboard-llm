@@ -1,3 +1,5 @@
+> Rapport historique conservé pour traçabilité. Le rapport canonique est `docs/final-correction-report.md`.
+
 # Rapport Final — Correction LOT 1 + LOT 2 (2026-05-01 03:36)
 
 ## Résumé exécutif

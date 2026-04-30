@@ -156,6 +156,7 @@ class DashboardAPIRoute:
             except Exception:
                 gpu_proc_payload = []
 
+            from llm_dashboard.monitors.gpu.processes import process_vram_mib
             return jsonify({
                 'cpu': get_cpu(), 'ram': get_ram(), 'gpus': get_gpu(),
                 'services': services_payload['services'],
@@ -184,7 +185,7 @@ class DashboardAPIRoute:
                 'llama_metrics': get_llama_met(),
                 'gpu_processes': gpu_proc_payload,
                 'gpu_process_count': len(gpu_proc_payload),
-                'gpu_process_vram_total_mib': sum(p.get('used_vram_mib', p.get('vram_mib', 0)) or 0 for p in gpu_proc_payload),
+                'gpu_process_vram_total_mib': sum(process_vram_mib(p) for p in gpu_proc_payload),
             })
 
         def _gpu_process_payload():

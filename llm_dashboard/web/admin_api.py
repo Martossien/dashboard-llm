@@ -216,7 +216,8 @@ class AdminAPIRoutes:
                         processes.append(entry)
                 except Exception as exc:
                     logger.warning("get_gpu_processes failed: %s", exc)
-            processes.sort(key=lambda p: p.get("used_vram_mib", p.get("vram_mib", 0)), reverse=True)
+            from llm_dashboard.monitors.gpu.processes import process_vram_mib
+            processes.sort(key=lambda p: process_vram_mib(p), reverse=True)
             if max_procs and len(processes) > max_procs:
                 processes = processes[:max_procs]
             return jsonify(build_gpu_process_payload(processes, enabled=True))

@@ -95,7 +95,8 @@ def create_metrics_endpoint(get_cpu_info, get_ram_info, get_gpu_info,
 
                 for p in all_procs:
                     v = str(p.get("backend") or "unknown")
-                    gpu_idx = str(p.get("gpu_index", "unknown"))
+                    raw_idx = p.get("gpu_index")
+                    gpu_idx = str(raw_idx) if raw_idx is not None else "unknown"
                     vram = _pvram(p)
                     key = (gpu_idx, v)
                     count_by_gpu_vendor[key] = count_by_gpu_vendor.get(key, 0) + 1
@@ -110,7 +111,8 @@ def create_metrics_endpoint(get_cpu_info, get_ram_info, get_gpu_info,
                 for p in all_procs:
                     pid = _escape_label(str(p.get("pid", "?")))
                     name = _escape_label(p.get("process_name", p.get("name", "unknown")))
-                    gpu_idx = _escape_label(str(p.get("gpu_index", "unknown")))
+                    raw_idx = p.get("gpu_index")
+                    gpu_idx = _escape_label(str(raw_idx) if raw_idx is not None else "unknown")
                     svc = _escape_label(p.get("service_guess", "unknown"))
                     v = _escape_label(str(p.get("backend") or "unknown"))
                     lines.append(
@@ -180,6 +182,7 @@ def register_public_api(app, get_cpu_info, get_ram_info, get_gpu_info,
         return public_gpu_processes_inner()
 
     def public_gpu_processes_inner():
+        from llm_dashboard.monitors.gpu.processes import process_vram_mib
         gp_config = config.get("gpu_processes", {})
         if not gp_config.get("enable", True):
             return jsonify({"processes": [], "count": 0, "total_vram_mib": 0, "enabled": False})
@@ -198,7 +201,7 @@ def register_public_api(app, get_cpu_info, get_ram_info, get_gpu_info,
                 import logging
                 logging.getLogger("dashboard-llm").warning("get_gpu_processes failed: %s", exc)
 
-        processes.sort(key=lambda p: p.get("used_vram_mib", p.get("vram_mib", 0)), reverse=True)
+        processes.sort(key=lambda p: process_vram_mib(p), reverse=True)
 
         if max_procs and len(processes) > max_procs:
             processes = processes[:max_procs]
