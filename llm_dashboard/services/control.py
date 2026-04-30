@@ -297,8 +297,7 @@ class ServiceController:
         return pids_killed
 
 
-# Backward-compatible import; canonical implementation lives in services.factory.
-from llm_dashboard.services.factory import create_service_controller_from_config  # noqa: F811
+
 
 
 def _process_vram_mib(proc: dict) -> float:

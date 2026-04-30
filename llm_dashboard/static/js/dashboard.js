@@ -412,7 +412,6 @@
             const allowed = ['vllm', 'ollama', 'llama_cpp', 'ik_llama_cpp', 'python', 'unknown'];
             return allowed.includes(service) ? service : 'unknown';
         }
-        }
 
         function escHtml(s) {
             const d = document.createElement('div');

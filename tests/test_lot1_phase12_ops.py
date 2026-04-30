@@ -12,7 +12,7 @@ class TestCreateServiceControllerFromConfig:
     """Tests pour create_service_controller_from_config()."""
 
     def test_creates_controller_with_known_services(self):
-        from llm_dashboard.services.control import create_service_controller_from_config
+        from llm_dashboard.services.factory import create_service_controller_from_config
         from llm_dashboard.services.control import ServiceController
         from llm_dashboard.services.commands import CommandRunner
 
@@ -39,7 +39,7 @@ class TestCreateServiceControllerFromConfig:
         assert isinstance(ctrl, ServiceController)
 
     def test_unknown_service_returns_error(self):
-        from llm_dashboard.services.control import create_service_controller_from_config
+        from llm_dashboard.services.factory import create_service_controller_from_config
         from llm_dashboard.services.commands import CommandRunner
 
         config = {

@@ -151,6 +151,11 @@ class DashboardAPIRoute:
             for k, v in config["services"].items():
                 svc_names[k] = v["name"]
 
+            try:
+                gpu_proc_payload = _gpu_process_payload()
+            except Exception:
+                gpu_proc_payload = []
+
             return jsonify({
                 'cpu': get_cpu(), 'ram': get_ram(), 'gpus': get_gpu(),
                 'services': services_payload['services'],
@@ -182,30 +187,24 @@ class DashboardAPIRoute:
                 'gpu_process_vram_total_mib': sum(p.get('used_vram_mib', 0) for p in gpu_proc_payload),
             })
 
-        def _get_gpu_processes_payload():
+        def _gpu_process_payload():
             gp_config = config.get("gpu_processes", {})
             if not gp_config.get("enable", True):
                 return []
-            try:
-                if not self._get_gpu_processes:
-                    return []
-                show_cmd = gp_config.get("show_command", True)
-                max_procs = gp_config.get("max_processes", 100)
-                raw = self._get_gpu_processes()
-                processes = []
-                for p in raw:
-                    entry = dict(p)
-                    if not show_cmd:
-                        entry["command"] = None
-                    processes.append(entry)
-                if max_procs and len(processes) > max_procs:
-                    processes = processes[:max_procs]
-                return processes
-            except Exception as e:
-                logger.error("get_gpu_processes failed in /api/data: %s", e)
+            if not self._get_gpu_processes:
                 return []
-
-        gpu_proc_payload = _get_gpu_processes_payload()
+            show_cmd = gp_config.get("show_command", True)
+            max_procs = gp_config.get("max_processes", 100)
+            raw = self._get_gpu_processes()
+            processes = []
+            for p in raw:
+                entry = dict(p)
+                if not show_cmd:
+                    entry["command"] = None
+                processes.append(entry)
+            if max_procs:
+                processes = processes[:max_procs]
+            return processes
 
         def get_ollama():
             try:
