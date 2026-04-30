@@ -338,7 +338,61 @@
                 else if (vramPct > wVram || powerPct > wPower) card.style.borderColor = '#d29922';
                 else card.style.borderColor = '#238636';
             });
+
+            updateGpuProcesses(data);
         }
 
         refreshInterval = setInterval(fetchData, (_cfg.refreshIntervalMs || 1000));
         fetchData();
+
+        function updateGpuProcesses(data) {
+            const section = document.getElementById('gpu-processes-section');
+            const tbody = document.getElementById('gpu-processes-body');
+            const summary = document.getElementById('gpu-process-summary');
+            const processes = data.gpu_processes || [];
+            const count = data.gpu_process_count || 0;
+            const total = data.gpu_process_vram_total_mib || 0;
+
+            if (!section || !tbody) return;
+            if (!processes.length) {
+                section.style.display = count > 0 ? '' : 'none';
+                tbody.innerHTML = '<tr><td colspan="7">No GPU processes detected</td></tr>';
+                if (summary) summary.textContent = '';
+                return;
+            }
+
+            section.style.display = '';
+            if (summary) summary.textContent = count + ' process' + (count !== 1 ? 'es' : '') + ' — ' + total.toFixed(0) + ' MiB VRAM';
+
+            tbody.innerHTML = '';
+            processes.forEach(function(p) {
+                const tr = document.createElement('tr');
+                const idx = p.gpu_index != null ? String(p.gpu_index) : '-';
+                const vram = p.used_vram_mib != null ? p.used_vram_mib.toFixed(0) + ' MiB' : '-';
+                const service = p.service_guess || 'unknown';
+                const cmd = p.command || '';
+                const user = p.username || '-';
+
+                const badgeClass = 'gpu-process-service-badge ' + service;
+                const serviceBadge = '<span class="' + badgeClass + '">' + service + '</span>';
+
+                tr.innerHTML = '<td>' + idx + '</td>' +
+                    '<td>' + p.pid + '</td>' +
+                    '<td>' + escHtml(p.process_name || '') + '</td>' +
+                    '<td>' + serviceBadge + '</td>' +
+                    '<td>' + escHtml(user) + '</td>' +
+                    '<td>' + vram + '</td>' +
+                    '<td class="gpu-process-command" title="' + escAttr(cmd) + '">' + escHtml(cmd) + '</td>';
+                tbody.appendChild(tr);
+            });
+        }
+
+        function escHtml(s) {
+            const d = document.createElement('div');
+            d.textContent = s;
+            return d.innerHTML;
+        }
+
+        function escAttr(s) {
+            return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }

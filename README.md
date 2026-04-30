@@ -15,8 +15,11 @@ manage service lifecycle (start/stop/restart) from a web interface.
 - Real-time GPU monitoring (NVIDIA via pynvml, multi-GPU)
 - Per-service terminal logs with noise filtering
 - Token rate tracking (prompt + generation tok/s)
+- Prometheus /metrics endpoint (CPU, RAM, GPU, services, GPU processes)
+- REST API (/api/v1/gpus, /api/v1/services, /api/v1/metrics, /api/v1/gpus/processes)
 - Service lifecycle management (start/stop/restart/force-kill)
-- Admin panel with authentication
+- Admin panel with CSRF protection
+- GPU Process Viewer (process name, VRAM, command, user, service guess)
 - Multi-backend support (llama.cpp, ik_llama.cpp, vLLM, Ollama)
 - Exclusive group management (one LLM per port)
 - Temperature and power monitoring

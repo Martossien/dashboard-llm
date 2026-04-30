@@ -272,5 +272,53 @@
         @media (max-width: 768px) {
             .top-section, .gpu-section {
                 grid-template-columns: 1fr;
-            }
+}
+
+/* GPU Process Viewer */
+.gpu-processes-section {
+    margin-top: 20px;
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    padding: 15px;
+}
+.gpu-process-table-wrapper {
+    overflow-x: auto;
+}
+.gpu-process-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+.gpu-process-table th {
+    text-align: left;
+    padding: 6px 10px;
+    border-bottom: 1px solid #30363d;
+    color: #8b949e;
+    font-weight: 500;
+}
+.gpu-process-table td {
+    padding: 5px 10px;
+    border-bottom: 1px solid #21262d;
+    color: #c9d1d9;
+}
+.gpu-process-command {
+    max-width: 300px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.gpu-process-service-badge {
+    display: inline-block;
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 11px;
+    font-weight: 500;
+}
+.gpu-process-service-badge.vllm { background: #1f6feb; color: #fff; }
+.gpu-process-service-badge.ollama { background: #8957e5; color: #fff; }
+.gpu-process-service-badge.llama_cpp { background: #238636; color: #fff; }
+.gpu-process-service-badge.ik_llama_cpp { background: #9e6a03; color: #fff; }
+.gpu-process-service-badge.python { background: #30363d; color: #8b949e; }
+.gpu-process-service-badge.unknown { background: #30363d; color: #8b949e; }
         }

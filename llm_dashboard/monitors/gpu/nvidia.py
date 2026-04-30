@@ -152,19 +152,113 @@ class NvidiaBackend(AbstractGPUBackend):
                 pass
 
     def get_gpu_processes(self) -> list[dict]:
+        if not self._initialized:
+            return []
+        if self._mode == "pynvml":
+            return self._get_gpu_processes_via_pynvml()
+        return self._get_gpu_processes_via_smi()
+
+    def _get_gpu_processes_via_pynvml(self) -> list[dict]:
+        """Collecte les processus GPU via pynvml avec enrichissement psutil."""
+        from llm_dashboard.monitors.gpu.processes import GPUProcess, guess_gpu_process_service
+
+        processes = []
+        p = self._pynvml
+        try:
+            count = p.nvmlDeviceGetCount()
+        except Exception as exc:
+            logger.warning("Failed to get GPU count: %s", exc)
+            return []
+
+        for i in range(count):
+            try:
+                handle = p.nvmlDeviceGetHandleByIndex(i)
+                gpu_uuid = self._safe(p.nvmlDeviceGetUUID, handle)
+            except Exception:
+                continue
+
+            for proc in self._safe(p.nvmlDeviceGetComputeRunningProcesses, handle, default=[]) or []:
+                pid = getattr(proc, 'pid', 0)
+                vram_bytes = getattr(proc, 'usedGpuMemory', None)
+                if vram_bytes is None:
+                    vram_bytes = 0
+                used_vram = vram_bytes / (1024 * 1024) if vram_bytes else 0.0
+
+                proc_name, username, cmd = self._enrich_process(pid)
+                service = guess_gpu_process_service(proc_name, cmd)
+
+                processes.append({
+                    "pid": pid,
+                    "gpu_index": i,
+                    "process_name": proc_name,
+                    "used_vram_mib": used_vram,
+                    "username": username,
+                    "command": cmd,
+                    "service_guess": service,
+                    "backend": "nvidia",
+                    "gpu_uuid": gpu_uuid,
+                })
+
+        return processes
+
+    def _get_gpu_processes_via_smi(self) -> list[dict]:
+        """Collecte les processus GPU via nvidia-smi avec enrichissement psutil."""
+        from llm_dashboard.monitors.gpu.processes import guess_gpu_process_service
+
         result = self._runner.nvidia_smi_query_compute_apps(timeout=10)
         if not result.success:
             return []
         processes = []
         for line in result.stdout.strip().splitlines():
             parts = [p.strip() for p in line.split(",")]
-            if len(parts) >= 3:
-                try:
-                    processes.append({
-                        "pid": int(parts[0]),
-                        "name": parts[1],
-                        "vram_mib": float(parts[2]),
-                    })
-                except (ValueError, IndexError):
-                    continue
+            if len(parts) < 3:
+                continue
+            try:
+                pid = int(parts[0])
+                smi_name = parts[1]
+                vram_mib = float(parts[2])
+            except (ValueError, IndexError):
+                continue
+
+            proc_name, username, cmd = self._enrich_process(pid)
+            service = guess_gpu_process_service(proc_name or smi_name, cmd)
+
+            processes.append({
+                "pid": pid,
+                "gpu_index": None,
+                "process_name": proc_name or smi_name,
+                "used_vram_mib": vram_mib,
+                "username": username,
+                "command": cmd,
+                "service_guess": service,
+                "backend": "nvidia",
+                "gpu_uuid": None,
+            })
+
         return processes
+
+    def _enrich_process(self, pid: int) -> tuple:
+        """Enrichit un PID avec psutil : process_name, username, command.
+
+        Returns:
+            tuple (process_name: str, username: str|None, command: str|None)
+        """
+        proc_name = f"pid-{pid}"
+        username = None
+        command = None
+        try:
+            import psutil as _ps
+            proc = _ps.Process(pid)
+            proc_name = proc.name()
+            try:
+                username = proc.username()
+            except Exception:
+                pass
+            try:
+                cmdline = proc.cmdline()
+                command = " ".join(cmdline)[:4096] if cmdline else None
+            except Exception:
+                pass
+        except Exception:
+            pass
+        return proc_name, username, command

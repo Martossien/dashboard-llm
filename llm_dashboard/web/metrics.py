@@ -69,14 +69,30 @@ def create_metrics_endpoint(get_cpu_info, get_ram_info, get_gpu_info,
 
         # GPU Processes
         if callable(get_gpu_processes):
-            lines.append('# HELP gpu_process_vram_mib GPU process VRAM usage in MiB')
-            lines.append('# TYPE gpu_process_vram_mib gauge')
+            lines.append('# HELP gpu_process_count Number of GPU processes')
+            lines.append('# TYPE gpu_process_count gauge')
+            lines.append('# HELP gpu_process_memory_used_mib GPU process memory usage in MiB')
+            lines.append('# TYPE gpu_process_memory_used_mib gauge')
+            lines.append('# HELP gpu_process_memory_total_mib Total GPU memory used by processes in MiB')
+            lines.append('# TYPE gpu_process_memory_total_mib gauge')
             try:
-                for p in get_gpu_processes():
+                all_procs = get_gpu_processes()
+                vendor = _escape_label("nvidia")
+                total_vram = sum(p.get("used_vram_mib", p.get("vram_mib", 0)) for p in all_procs)
+                lines.append(f'gpu_process_count{{vendor="{vendor}"}} {len(all_procs)}')
+                lines.append(f'gpu_process_memory_total_mib{{vendor="{vendor}"}} {total_vram}')
+                for p in all_procs:
                     pid = _escape_label(str(p.get("pid", "?")))
-                    name = _escape_label(p.get("name", "unknown"))
-                    vram = p.get("vram_mib", 0)
-                    lines.append(f'gpu_process_vram_mib{{pid="{pid}",name="{name}"}} {vram}')
+                    name = _escape_label(p.get("process_name", p.get("name", "unknown")))
+                    gpu_idx = _escape_label(str(p.get("gpu_index", "unknown")))
+                    service = _escape_label(p.get("service_guess", "unknown"))
+                    vram = p.get("used_vram_mib", p.get("vram_mib", 0))
+                    lines.append(
+                        f'gpu_process_memory_used_mib{{'
+                        f'pid="{pid}",gpu_index="{gpu_idx}",'
+                        f'process_name="{name}",service="{service}",'
+                        f'vendor="{vendor}"}} {vram}'
+                    )
             except Exception:
                 pass
 

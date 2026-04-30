@@ -70,10 +70,14 @@ class TestNvidiaBackend:
         )
 
         backend = NvidiaBackend(runner=runner)
-        assert backend.get_gpu_processes() == [
-            {"pid": 1234, "name": "python", "vram_mib": 2048.0},
-            {"pid": 5678, "name": "llama-server", "vram_mib": 8192.0},
-        ]
+        backend._initialized = True
+        backend._mode = "smi"
+        processes = backend.get_gpu_processes()
+        assert len(processes) == 2
+        assert processes[0]["pid"] == 1234
+        assert processes[0]["used_vram_mib"] == 2048.0
+        assert processes[1]["pid"] == 5678
+        assert processes[1]["used_vram_mib"] == 8192.0
         runner.nvidia_smi_query_compute_apps.assert_called_once_with(timeout=10)
 
     def test_gpu_processes_returns_empty_on_command_error(self):

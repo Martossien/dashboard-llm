@@ -38,6 +38,31 @@
 
         <div class="gpu-section" id="gpu-cards"></div>
 
+        <div class="gpu-processes-section" id="gpu-processes-section" style="display:none;">
+            <div class="section-header">
+                <h3>GPU Processes</h3>
+                <div id="gpu-process-summary"></div>
+            </div>
+            <div class="gpu-process-table-wrapper">
+                <table class="gpu-process-table">
+                    <thead>
+                        <tr>
+                            <th>GPU</th>
+                            <th>PID</th>
+                            <th>Process</th>
+                            <th>Service</th>
+                            <th>User</th>
+                            <th>VRAM</th>
+                            <th>Command</th>
+                        </tr>
+                    </thead>
+                    <tbody id="gpu-processes-body">
+                        <tr><td colspan="7">No GPU processes detected</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
         <div class="logs-section">
             <div class="logs-header">
                 <h3>Terminal Logs</h3>
