@@ -6,6 +6,16 @@ Pas d'import depuis monitor.py.
 from flask import jsonify, Response
 
 
+def build_gpu_process_payload(processes: list[dict], enabled: bool = True) -> dict:
+    """Construit le payload stable pour l'API GPU processes."""
+    return {
+        "processes": processes,
+        "count": len(processes),
+        "total_vram_mib": sum(p.get("used_vram_mib", p.get("vram_mib", 0)) for p in processes),
+        "enabled": enabled,
+    }
+
+
 def _escape_label(value) -> str:
     """Echappe une valeur de label Prometheus."""
     return str(value).replace("\\", "\\\\").replace("\n", "\\n").replace('"', '\\"')
@@ -170,20 +180,18 @@ def register_public_api(app, get_cpu_info, get_ram_info, get_gpu_info,
             try:
                 raw = get_gpu_processes()
                 show_cmd = gp_config.get("show_command", True)
+                max_procs = gp_config.get("max_processes", 100)
                 for p in raw:
                     entry = dict(p)
                     if not show_cmd:
                         entry["command"] = None
                     processes.append(entry)
+                if max_procs and len(processes) > max_procs:
+                    processes = processes[:max_procs]
             except Exception as exc:
                 import logging
                 logging.getLogger("dashboard-llm").warning("get_gpu_processes failed: %s", exc)
 
         processes.sort(key=lambda p: p.get("used_vram_mib", p.get("vram_mib", 0)), reverse=True)
 
-        return jsonify({
-            "processes": processes,
-            "count": len(processes),
-            "total_vram_mib": sum(p.get("used_vram_mib", p.get("vram_mib", 0)) for p in processes),
-            "enabled": True,
-        })
+        return jsonify(build_gpu_process_payload(processes, enabled=True))

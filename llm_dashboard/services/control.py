@@ -277,15 +277,19 @@ class ServiceController:
 
         # SIGTERM
         for p in big_procs:
-            if self.terminate_pid(p["pid"], "TERM"):
-                pids_killed.append(p["pid"])
+            pid = _safe_process_pid(p)
+            if pid is not None and self.terminate_pid(pid, "TERM"):
+                pids_killed.append(pid)
 
         time.sleep(sigkill_after)
 
         # Survivants → SIGKILL
         survivors = self._gpu_process_lister()
-        survivor_pids = {p["pid"] for p in survivors
-                        if _process_vram_mib(p) >= threshold_mib}
+        survivor_pids = {
+            pid for p in survivors
+            if (pid := _safe_process_pid(p)) is not None
+            and _process_vram_mib(p) >= threshold_mib
+        }
         if survivor_pids:
             logger.warning("_kill_gpu_processes: %d processes survived SIGTERM",
                          len(survivor_pids))
@@ -301,4 +305,15 @@ class ServiceController:
 
 
 from llm_dashboard.monitors.gpu.processes import process_vram_mib as _process_vram_mib
+
+
+def _safe_process_pid(proc: dict):
+    """Extrait un PID valide (> 1) d'un dict processus. Retourne None si invalide."""
+    try:
+        pid = int(proc.get("pid", 0) or 0)
+    except (TypeError, ValueError):
+        return None
+    if pid <= 1:
+        return None
+    return pid
 

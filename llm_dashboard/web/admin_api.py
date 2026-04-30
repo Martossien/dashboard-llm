@@ -199,10 +199,23 @@ class AdminAPIRoutes:
             from flask import session
             if not login_required():
                 return jsonify({"error": "unauthorized"}), 401
+            from llm_dashboard.web.metrics import build_gpu_process_payload
+            gp_config = config.get("gpu_processes", {})
+            if not gp_config.get("enable", True):
+                return jsonify(build_gpu_process_payload([], enabled=False))
             processes = []
             if callable(self._get_gpu_processes):
                 try:
-                    processes = self._get_gpu_processes()
+                    raw = self._get_gpu_processes()
+                    show_cmd = gp_config.get("show_command", True)
+                    max_procs = gp_config.get("max_processes", 100)
+                    for p in raw:
+                        entry = dict(p)
+                        if not show_cmd:
+                            entry["command"] = None
+                        processes.append(entry)
+                    if max_procs and len(processes) > max_procs:
+                        processes = processes[:max_procs]
                 except Exception as exc:
                     logger.warning("get_gpu_processes failed: %s", exc)
-            return jsonify({"processes": processes})
+            return jsonify(build_gpu_process_payload(processes, enabled=True))

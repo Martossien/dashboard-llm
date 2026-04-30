@@ -26,6 +26,7 @@ grep
 patch_restart_dropdown.py
 
 # Dossiers privés
+docs/
 backups/
 inspirations/
 .claude/
