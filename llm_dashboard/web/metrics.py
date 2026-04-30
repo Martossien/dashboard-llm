@@ -173,9 +173,11 @@ def register_public_api(app, get_cpu_info, get_ram_info, get_gpu_info,
                 pass
 
         # Sort by VRAM usage descending (like nvitop/gpustat)
-        processes.sort(key=lambda p: p.get("vram_mib", 0), reverse=True)
+        processes.sort(key=lambda p: p.get("used_vram_mib", p.get("vram_mib", 0)), reverse=True)
 
         return jsonify({
             "processes": processes,
-            "total_vram_mib": sum(p.get("vram_mib", 0) for p in processes),
+            "count": len(processes),
+            "total_vram_mib": sum(p.get("used_vram_mib", p.get("vram_mib", 0)) for p in processes),
+            "enabled": True,
         })

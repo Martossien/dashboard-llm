@@ -72,6 +72,7 @@ def register_routes(app, config: dict, deps: RuntimeDependencies) -> None:
         logger,
         get_ollama_models=deps.get_ollama_models,
         get_llama_metrics=deps.get_llama_metrics,
+        get_gpu_processes=deps.get_gpu_processes,
     )
     dashboard_api.register(app)
 
