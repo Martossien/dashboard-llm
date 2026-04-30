@@ -295,3 +295,54 @@ class ServiceController:
         logger.info("_kill_gpu_processes: done. %d PIDs killed.", len(pids_killed))
         return pids_killed
 
+
+def create_service_controller_from_config(
+    config: dict,
+    runner,
+    gpu_monitor=None,
+    port_checker=None,
+):
+    """Cree un ServiceController a partir d'une config et d'un runner.
+
+    Args:
+        config: dictionnaire de configuration complet (avec start_stop, services, admin).
+        runner: instance CommandRunner.
+        gpu_monitor: instance GPUMonitor (optionnel, pour VRAM check et GPU processes).
+        port_checker: callable(port, timeout) -> bool (optionnel).
+
+    Returns:
+        ServiceController configure.
+    """
+    from llm_dashboard.models import normalize_services_config
+    from llm_dashboard.services.registry import ServiceRegistry
+
+    services = normalize_services_config(config)
+    registry = ServiceRegistry(services)
+    allow_force_stop = config.get("admin", {}).get("allow_force_stop", False)
+
+    def _vram_checker():
+        if not gpu_monitor:
+            return {"enabled": False}
+        try:
+            return gpu_monitor.vram_status()
+        except Exception:
+            return {"enabled": False}
+
+    def _gpu_process_lister():
+        if not gpu_monitor:
+            return []
+        try:
+            return gpu_monitor.gpu_processes()
+        except Exception:
+            return []
+
+    return ServiceController(
+        registry=registry,
+        runner=runner,
+        vram_checker=_vram_checker,
+        port_checker=port_checker,
+        gpu_process_lister=_gpu_process_lister,
+        active_key_getter=None,
+        allow_force_stop=allow_force_stop,
+    )
+
