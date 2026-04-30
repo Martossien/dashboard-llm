@@ -58,9 +58,10 @@ class AdminAPIRoutes:
                 return True
             csrf_header = config.get("admin", {}).get("csrf_header", "X-CSRF-Token")
             token = request.headers.get(csrf_header, "")
+            import secrets
             from flask import session
             expected = session.get("csrf_token", "")
-            if not token or token != expected:
+            if not token or not expected or not secrets.compare_digest(token, expected):
                 logger.warning("CSRF validation failed from %s", request.remote_addr or "unknown")
                 return False
             return True

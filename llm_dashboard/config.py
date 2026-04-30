@@ -102,6 +102,17 @@ DEFAULT_CONFIG = {
         "power_warning_percent": 70,
         "power_danger_percent": 90,
     },
+    "admin": {
+        "enabled": True,
+        "allow_force_stop": True,
+        "csrf_enabled": True,
+        "csrf_header": "X-CSRF-Token",
+    },
+    "gpu_processes": {
+        "enable": True,
+        "show_command": True,
+        "max_processes": 100,
+    },
 }
 
 ENV_OVERRIDES = {

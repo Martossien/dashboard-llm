@@ -6,6 +6,7 @@ et check_admin_password() sont injectes via le constructeur.
 """
 
 import logging
+import secrets
 
 from flask import (
     redirect,
@@ -54,12 +55,14 @@ class AdminAuthRoutes:
         def admin_login():
             if config.get("admin", {}).get("enabled", True) is False:
                 session["admin_logged_in"] = True
+                session["csrf_token"] = secrets.token_urlsafe(32)
                 return redirect(url_for('admin_panel'))
             password = request.form.get('password', '')
             client_ip = request.remote_addr or "unknown"
             if check_password(password):
                 route_logger.info("Admin login successful from %s", client_ip)
                 session["admin_logged_in"] = True
+                session["csrf_token"] = secrets.token_urlsafe(32)
                 return redirect(url_for('admin_panel'))
             route_logger.warning(
                 "Admin login FAILED from %s — password length: %d",
@@ -70,6 +73,7 @@ class AdminAuthRoutes:
         @app.route('/admin/logout')
         def admin_logout():
             session.pop("admin_logged_in", None)
+            session.pop("csrf_token", None)
             return redirect(url_for('index'))
 
 

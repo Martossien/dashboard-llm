@@ -1,3 +1,10 @@
+        function getCsrfHeaders() {
+            const cfg = window.ADMIN_CONFIG || {};
+            const token = cfg.csrfToken || '';
+            const header = cfg.csrfHeader || 'X-CSRF-Token';
+            return token ? { [header]: token } : {};
+        }
+
         let serviceStates = {};
         let isPolling = true;
         const LLM_KEYS = new Set((() => {
@@ -63,14 +70,14 @@
                     response = await fetch('/api/admin/force_stop', {
                         method: 'POST',
                         credentials: 'same-origin',
-                        headers: { 'Content-Type': 'application/json' },
+                        headers: { 'Content-Type': 'application/json', ...getCsrfHeaders() },
                         body: JSON.stringify({ service: key })
                     });
                 } else {
                     response = await fetch('/api/admin/' + action, {
                         method: 'POST',
                         credentials: 'same-origin',
-                        headers: { 'Content-Type': 'application/json' },
+                        headers: { 'Content-Type': 'application/json', ...getCsrfHeaders() },
                         body: JSON.stringify({ service: key })
                     });
                 }
@@ -116,7 +123,7 @@
                 let response = await fetch(url, {
                     method: 'POST',
                     credentials: 'same-origin',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 'Content-Type': 'application/json', ...getCsrfHeaders() },
                     body: body
                 });
                 const data = await response.json();
@@ -135,7 +142,8 @@
             try {
                 const response = await fetch('/api/admin/stop_all_llm', {
                     method: 'POST',
-                    credentials: 'same-origin'
+                    credentials: 'same-origin',
+                    headers: { ...getCsrfHeaders() }
                 });
                 const data = await response.json();
                 if (data.success) {

@@ -131,6 +131,10 @@
     window.ADMIN_INITIAL_STATE = {
         services: {{ services | tojson }}
     };
+    window.ADMIN_CONFIG = {
+        csrfToken: "{{ csrf_token }}",
+        csrfHeader: "{{ csrf_header }}"
+    };
     </script>
     <script src="{{ url_for('static', filename='js/admin.js') }}"></script>
 </body>

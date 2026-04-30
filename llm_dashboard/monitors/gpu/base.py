@@ -77,8 +77,12 @@ class AbstractGPUBackend(ABC):
             })
         return {"enabled": True, "gpus": gpus}
 
-    def get_gpu_processes(self) -> list[dict]:
-        """Retourne les processus GPU consommateurs de VRAM."""
+    def get_gpu_processes(self) -> list:
+        """Retourne les processus GPU consommateurs de VRAM.
+
+        Returns:
+            list[GPUProcess] ou list[dict] (normalise par GPUMonitor).
+        """
         return []
 
     @property

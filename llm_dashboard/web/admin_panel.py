@@ -6,7 +6,7 @@ Pas d'import depuis monitor.py. Toutes les dependances sont injectees.
 
 import logging
 
-from flask import redirect, render_template, url_for
+from flask import redirect, render_template, url_for, session
 
 
 class AdminPanelRoute:
@@ -47,4 +47,6 @@ class AdminPanelRoute:
                 service_logs=service_logs,
                 service_order=list(config["services"].keys()),
                 service_names={k: v["name"] for k, v in config["services"].items()},
+                csrf_token=session.get("csrf_token", ""),
+                csrf_header=config.get("admin", {}).get("csrf_header", "X-CSRF-Token"),
             )

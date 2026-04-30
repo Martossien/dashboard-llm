@@ -14,6 +14,9 @@ class NoGPUBackend(AbstractGPUBackend):
     def get_vram_status(self) -> dict:
         return {"enabled": False}
 
+    def get_gpu_processes(self) -> list:
+        return []
+
     @property
     def vendor_name(self) -> str:
         return "cpu"
