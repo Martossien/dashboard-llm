@@ -156,6 +156,13 @@ ENV_OVERRIDES = {
     "DASHBOARD_VRAM_DANGER_PERCENT": ("thresholds", "vram_danger_percent"),
     "DASHBOARD_POWER_WARNING_PERCENT": ("thresholds", "power_warning_percent"),
     "DASHBOARD_POWER_DANGER_PERCENT": ("thresholds", "power_danger_percent"),
+    "DASHBOARD_ADMIN_ENABLED": ("admin", "enabled"),
+    "DASHBOARD_ADMIN_ALLOW_FORCE_STOP": ("admin", "allow_force_stop"),
+    "DASHBOARD_ADMIN_CSRF_ENABLED": ("admin", "csrf_enabled"),
+    "DASHBOARD_ADMIN_CSRF_HEADER": ("admin", "csrf_header"),
+    "DASHBOARD_GPU_PROCESSES_ENABLE": ("gpu_processes", "enable"),
+    "DASHBOARD_GPU_PROCESSES_SHOW_COMMAND": ("gpu_processes", "show_command"),
+    "DASHBOARD_GPU_PROCESSES_MAX": ("gpu_processes", "max_processes"),
 }
 
 
@@ -277,6 +284,8 @@ def validate_config(config: dict) -> None:
     _validate_urls(config)
     _validate_endpoints(config)
     _validate_lists(config)
+    _validate_admin(config)
+    _validate_gpu_processes(config)
 
 
 def _safe_get_nested(config: dict, path: tuple) -> Optional[Any]:
@@ -341,6 +350,35 @@ def _validate_lists(config: dict) -> None:
         if not isinstance(value, list) or not value:
             logger.warning("Invalid list for %s, using default", ".".join(path))
             set_nested(config, path, get_default(path))
+
+
+def _validate_admin(config: dict) -> None:
+    """Valide la section admin."""
+    import re
+    for key in ("enabled", "allow_force_stop", "csrf_enabled"):
+        value = _safe_get_nested(config, ("admin", key))
+        if value is not None and not isinstance(value, bool):
+            logger.warning("Invalid bool for admin.%s, using default", key)
+            set_nested(config, ("admin", key), get_default(("admin", key)))
+    csrf_header = _safe_get_nested(config, ("admin", "csrf_header"))
+    if csrf_header is not None:
+        if not isinstance(csrf_header, str) or not re.fullmatch(r"[A-Za-z0-9-]+", csrf_header):
+            logger.warning("Invalid admin.csrf_header, using default")
+            set_nested(config, ("admin", "csrf_header"), get_default(("admin", "csrf_header")))
+
+
+def _validate_gpu_processes(config: dict) -> None:
+    """Valide la section gpu_processes."""
+    for key in ("enable", "show_command"):
+        value = _safe_get_nested(config, ("gpu_processes", key))
+        if value is not None and not isinstance(value, bool):
+            logger.warning("Invalid bool for gpu_processes.%s, using default", key)
+            set_nested(config, ("gpu_processes", key), get_default(("gpu_processes", key)))
+    max_procs = _safe_get_nested(config, ("gpu_processes", "max_processes"))
+    if max_procs is not None:
+        if not isinstance(max_procs, int) or not (1 <= max_procs <= 10000):
+            logger.warning("Invalid gpu_processes.max_processes, using default")
+            set_nested(config, ("gpu_processes", "max_processes"), get_default(("gpu_processes", "max_processes")))
 
 
 def load_config(config_path: Optional[str] = None) -> dict:
