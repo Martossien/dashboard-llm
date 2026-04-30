@@ -104,9 +104,18 @@ def test_create_app_accepts_template_folder(tmp_path):
 def test_monitor_uses_app_factory():
     source = (ROOT / "monitor.py").read_text(encoding="utf-8")
 
-    assert "create_app(CONFIG)" in source
-    assert "Flask(__name__" not in source
-    assert "from llm_dashboard.web.app import create_app" not in source
+    assert "create_full_app" in source
+    assert "from llm_dashboard.app_factory import create_full_app" in source
+
+
+def test_app_factory_contains_route_wiring():
+    factory_source = (ROOT / "llm_dashboard" / "app_factory.py").read_text(encoding="utf-8")
+
+    assert "AdminAuthRoutes(" in factory_source
+    assert "AdminPanelRoute(" in factory_source
+    assert "AdminAPIRoutes(" in factory_source
+    assert "DashboardAPIRoute(" in factory_source
+    assert "register_public_api(" in factory_source
 
 
 def test_monitor_does_not_define_admin_auth_routes():
@@ -115,14 +124,14 @@ def test_monitor_does_not_define_admin_auth_routes():
     assert "def admin_login_page(" not in source
     assert "def admin_login(" not in source
     assert "def admin_logout(" not in source
-    assert "AdminAuthRoutes(CONFIG, admin_login_required, check_admin_password" in source
+    assert "AdminAuthRoutes(CONFIG" not in source
 
 
 def test_monitor_does_not_define_admin_panel_route():
     source = (ROOT / "monitor.py").read_text(encoding="utf-8")
 
     assert "def admin_panel(" not in source
-    assert "AdminPanelRoute(CONFIG, admin_login_required" in source
+    assert "AdminPanelRoute(CONFIG" not in source
 
 
 def test_monitor_does_not_define_admin_api_routes():
@@ -139,7 +148,7 @@ def test_monitor_does_not_define_admin_api_routes():
     ]
     for marker in forbidden_defs:
         assert marker not in source
-    assert "AdminAPIRoutes(CONFIG, admin_login_required" in source
+    assert "AdminAPIRoutes(CONFIG" not in source
 
 
 def test_monitor_does_not_define_api_data_route():
@@ -147,7 +156,7 @@ def test_monitor_does_not_define_api_data_route():
 
     assert "def api_data(" not in source
     assert "@app.route('/api/data')" not in source
-    assert "DashboardAPIRoute(" in source
+    assert "DashboardAPIRoute(" not in source
 
 
 def _register_dashboard_api(app):
