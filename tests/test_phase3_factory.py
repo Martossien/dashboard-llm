@@ -16,7 +16,7 @@ class TestFullAppFactory:
         from llm_dashboard.app_factory import create_full_app
         from flask import Flask
 
-        with patch("llm_dashboard.app_factory.psutil.cpu_percent"), \
+        with patch("llm_dashboard.runtime.psutil.cpu_percent"), \
              patch("llm_dashboard.app_factory.load_startup_stats"), \
              patch("llm_dashboard.monitors.gpu.factory.get_gpu_backend") as mock_gpu:
             from llm_dashboard.monitors.gpu.nogpu import NoGPUBackend
@@ -33,7 +33,7 @@ class TestFullAppFactory:
         from llm_dashboard.app_factory import create_full_app
         from flask import Flask
 
-        with patch("llm_dashboard.app_factory.psutil.cpu_percent"), \
+        with patch("llm_dashboard.runtime.psutil.cpu_percent"), \
              patch("llm_dashboard.app_factory.load_startup_stats"), \
              patch("llm_dashboard.monitors.gpu.factory.get_gpu_backend") as mock_gpu:
             from llm_dashboard.monitors.gpu.nogpu import NoGPUBackend
@@ -48,7 +48,7 @@ class TestFullAppFactory:
         from llm_dashboard.app_factory import create_full_app
         from flask import Flask
 
-        with patch("llm_dashboard.app_factory.psutil.cpu_percent"), \
+        with patch("llm_dashboard.runtime.psutil.cpu_percent"), \
              patch("llm_dashboard.app_factory.load_startup_stats"), \
              patch("llm_dashboard.monitors.gpu.factory.get_gpu_backend") as mock_gpu:
             from llm_dashboard.monitors.gpu.nogpu import NoGPUBackend
@@ -60,7 +60,7 @@ class TestFullAppFactory:
     def test_health_route_registered(self):
         from llm_dashboard.app_factory import create_full_app
 
-        with patch("llm_dashboard.app_factory.psutil.cpu_percent"), \
+        with patch("llm_dashboard.runtime.psutil.cpu_percent"), \
              patch("llm_dashboard.app_factory.load_startup_stats"), \
              patch("llm_dashboard.monitors.gpu.factory.get_gpu_backend") as mock_gpu:
             from llm_dashboard.monitors.gpu.nogpu import NoGPUBackend
@@ -76,7 +76,7 @@ class TestFullAppFactory:
     def test_root_route_registered(self):
         from llm_dashboard.app_factory import create_full_app
 
-        with patch("llm_dashboard.app_factory.psutil.cpu_percent"), \
+        with patch("llm_dashboard.runtime.psutil.cpu_percent"), \
              patch("llm_dashboard.app_factory.load_startup_stats"), \
              patch("llm_dashboard.monitors.gpu.factory.get_gpu_backend") as mock_gpu:
             from llm_dashboard.monitors.gpu.nogpu import NoGPUBackend
@@ -91,7 +91,7 @@ class TestFullAppFactory:
     def test_metrics_route_registered(self):
         from llm_dashboard.app_factory import create_full_app
 
-        with patch("llm_dashboard.app_factory.psutil.cpu_percent"), \
+        with patch("llm_dashboard.runtime.psutil.cpu_percent"), \
              patch("llm_dashboard.app_factory.load_startup_stats"), \
              patch("llm_dashboard.monitors.gpu.factory.get_gpu_backend") as mock_gpu:
             from llm_dashboard.monitors.gpu.nogpu import NoGPUBackend
@@ -133,7 +133,7 @@ class TestEndpointRegistration:
     def test_all_required_routes_registered(self):
         from llm_dashboard.app_factory import create_full_app
 
-        with patch("llm_dashboard.app_factory.psutil.cpu_percent"), \
+        with patch("llm_dashboard.runtime.psutil.cpu_percent"), \
              patch("llm_dashboard.app_factory.load_startup_stats"), \
              patch("llm_dashboard.monitors.gpu.factory.get_gpu_backend") as mock_gpu:
             from llm_dashboard.monitors.gpu.nogpu import NoGPUBackend
@@ -172,7 +172,7 @@ class TestCLIMain:
     def test_main_calls_app_run(self):
         from llm_dashboard.app_factory import create_full_app
 
-        with patch("llm_dashboard.app_factory.psutil.cpu_percent"), \
+        with patch("llm_dashboard.runtime.psutil.cpu_percent"), \
              patch("llm_dashboard.app_factory.load_startup_stats"), \
              patch("llm_dashboard.monitors.gpu.factory.get_gpu_backend") as mock_gpu:
             from llm_dashboard.monitors.gpu.nogpu import NoGPUBackend
