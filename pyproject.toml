@@ -40,6 +40,8 @@ llm-dashboard = "llm_dashboard.cli:main"
 packages = ["llm_dashboard"]
 include = [
     "llm_dashboard/templates/*.html",
+    "llm_dashboard/static/css/*.css",
+    "llm_dashboard/static/js/*.js",
 ]
 
 [tool.pytest.ini_options]

@@ -5,9 +5,12 @@ Extrait de monitor.py (Lot 2).
 Fonctions pures ou quasi pures, sans dependance Flask ni GPU.
 """
 
+from __future__ import annotations
+
 import logging
 import os
 from copy import deepcopy
+from typing import Any, Optional, Union
 
 logger = logging.getLogger("dashboard-llm.config")
 
@@ -15,7 +18,7 @@ logger = logging.getLogger("dashboard-llm.config")
 try:
     import yaml
 except Exception:
-    yaml = None
+    yaml: Any = None  # type: ignore[no-redef]
 
 
 # ============================================================================
@@ -149,7 +152,7 @@ ENV_OVERRIDES = {
 # Fonctions utilitaires de configuration
 # ============================================================================
 
-def deep_update(target, updates):
+def deep_update(target: dict, updates: dict) -> None:
     """Fusion recursive : updates est merge dans target (modifie en place)."""
     for key, value in updates.items():
         if isinstance(value, dict) and isinstance(target.get(key), dict):
@@ -158,7 +161,7 @@ def deep_update(target, updates):
             target[key] = value
 
 
-def parse_bool(value):
+def parse_bool(value: Union[bool, str, int]) -> bool:
     """Parse une valeur booleenne (bool, str, int)."""
     if isinstance(value, bool):
         return value
@@ -170,14 +173,14 @@ def parse_bool(value):
     raise ValueError(f"Invalid boolean value: {value}")
 
 
-def parse_list(value):
+def parse_list(value: Union[list, str]) -> list:
     """Parse une liste (list existante ou str separee par des virgules)."""
     if isinstance(value, list):
         return value
     return [item.strip() for item in str(value).split(",") if item.strip()]
 
 
-def get_nested(config, path):
+def get_nested(config: dict, path: tuple) -> Any:
     """Accede a une valeur imbriquee dans un dict via un chemin de tuples."""
     current = config
     for key in path:
@@ -185,7 +188,7 @@ def get_nested(config, path):
     return current
 
 
-def set_nested(config, path, value):
+def set_nested(config: dict, path: tuple, value: Any) -> None:
     """Definit une valeur imbriquee, en creant les dicts intermediaires."""
     current = config
     for key in path[:-1]:
@@ -193,7 +196,7 @@ def set_nested(config, path, value):
     current[path[-1]] = value
 
 
-def get_default(path):
+def get_default(path: tuple) -> Any:
     """Retourne la valeur par defaut pour un chemin de config donne."""
     return get_nested(DEFAULT_CONFIG, path)
 
@@ -202,7 +205,7 @@ def get_default(path):
 # Chargement et validation
 # ============================================================================
 
-def apply_env_overrides(config):
+def apply_env_overrides(config: dict) -> None:
     """Applique les surcharges de variables d'environnement sur la config."""
     for env_key, path in ENV_OVERRIDES.items():
         if env_key not in os.environ:
@@ -225,7 +228,7 @@ def apply_env_overrides(config):
             logger.warning("Invalid env override %s=%r (%s)", env_key, raw_value, exc)
 
 
-def validate_config(config):
+def validate_config(config: dict) -> None:
     """Valide la configuration et remplace les valeurs invalides par les defauts."""
     checks = [
         (("server", "port"), int, 1, 65535),
@@ -265,7 +268,7 @@ def validate_config(config):
     _validate_lists(config)
 
 
-def _safe_get_nested(config, path):
+def _safe_get_nested(config: dict, path: tuple) -> Optional[Any]:
     """get_nested qui retourne None si le chemin n'existe pas (pour validation)."""
     try:
         return get_nested(config, path)
@@ -273,7 +276,7 @@ def _safe_get_nested(config, path):
         return None
 
 
-def _validate_urls(config):
+def _validate_urls(config: dict) -> None:
     """Valide les URLs de base des services."""
     url_paths = [
         ("services", "ik_llama_cpp", "base_url"),
@@ -292,7 +295,7 @@ def _validate_urls(config):
             set_nested(config, path, get_default(path))
 
 
-def _validate_endpoints(config):
+def _validate_endpoints(config: dict) -> None:
     """Valide les health/model endpoints (doivent commencer par /)."""
     endpoint_paths = [
         ("services", "ik_llama_cpp", "health_endpoint"),
@@ -314,7 +317,7 @@ def _validate_endpoints(config):
             set_nested(config, path, get_default(path))
 
 
-def _validate_lists(config):
+def _validate_lists(config: dict) -> None:
     """Valide les champs de type liste."""
     list_paths = [
         ("model_detection", "process_keywords"),
@@ -329,7 +332,7 @@ def _validate_lists(config):
             set_nested(config, path, get_default(path))
 
 
-def load_config(config_path=None):
+def load_config(config_path: Optional[str] = None) -> dict:
     """Charge la configuration depuis un fichier YAML, avec surcharges env.
 
     Args:
@@ -347,7 +350,7 @@ def load_config(config_path=None):
             os.path.join(os.path.dirname(__file__), "..", "config.yaml"),
         )
 
-    if os.path.exists(config_path):
+    if config_path and os.path.exists(config_path):
         if yaml is None:
             logger.warning("PyYAML not installed, ignoring %s and using defaults", config_path)
         else:
