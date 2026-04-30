@@ -77,9 +77,18 @@ def create_metrics_endpoint(get_cpu_info, get_ram_info, get_gpu_info,
             lines.append('# TYPE gpu_process_memory_total_mib gauge')
             try:
                 all_procs = get_gpu_processes()
-                vendor = _escape_label("nvidia")
+                vendor = _escape_label(all_procs[0].get("backend", "nvidia") if all_procs else "unknown")
                 total_vram = sum(p.get("used_vram_mib", p.get("vram_mib", 0)) for p in all_procs)
-                lines.append(f'gpu_process_count{{vendor="{vendor}"}} {len(all_procs)}')
+
+                # Count per GPU index
+                gpu_counts: dict[str, int] = {}
+                for p in all_procs:
+                    gpu_idx = str(p.get("gpu_index", "unknown"))
+                    gpu_counts[gpu_idx] = gpu_counts.get(gpu_idx, 0) + 1
+
+                for gpu_idx, count in sorted(gpu_counts.items()):
+                    lines.append(f'gpu_process_count{{gpu_index="{_escape_label(gpu_idx)}",vendor="{vendor}"}} {count}')
+
                 lines.append(f'gpu_process_memory_total_mib{{vendor="{vendor}"}} {total_vram}')
                 for p in all_procs:
                     pid = _escape_label(str(p.get("pid", "?")))
