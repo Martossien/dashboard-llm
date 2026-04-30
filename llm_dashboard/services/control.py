@@ -11,6 +11,8 @@ import logging
 import time
 from dataclasses import dataclass, field
 
+from llm_dashboard.monitors.gpu.processes import process_vram_mib as _process_vram_mib
+
 logger = logging.getLogger("dashboard-llm.control")
 
 
@@ -302,9 +304,6 @@ class ServiceController:
 
 
 
-
-
-from llm_dashboard.monitors.gpu.processes import process_vram_mib as _process_vram_mib
 
 
 def _safe_process_pid(proc: dict):

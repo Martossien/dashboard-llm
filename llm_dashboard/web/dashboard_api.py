@@ -184,10 +184,11 @@ class DashboardAPIRoute:
                 'llama_metrics': get_llama_met(),
                 'gpu_processes': gpu_proc_payload,
                 'gpu_process_count': len(gpu_proc_payload),
-                'gpu_process_vram_total_mib': sum(p.get('used_vram_mib', 0) for p in gpu_proc_payload),
+                'gpu_process_vram_total_mib': sum(p.get('used_vram_mib', p.get('vram_mib', 0)) or 0 for p in gpu_proc_payload),
             })
 
         def _gpu_process_payload():
+            from llm_dashboard.monitors.gpu.processes import process_vram_mib
             gp_config = config.get("gpu_processes", {})
             if not gp_config.get("enable", True):
                 return []
@@ -202,7 +203,8 @@ class DashboardAPIRoute:
                 if not show_cmd:
                     entry["command"] = None
                 processes.append(entry)
-            if max_procs:
+            processes.sort(key=lambda p: process_vram_mib(p), reverse=True)
+            if max_procs and len(processes) > max_procs:
                 processes = processes[:max_procs]
             return processes
 

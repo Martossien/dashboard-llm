@@ -168,3 +168,33 @@ class TestAdminGPUProcessAPI:
             assert "count" in data
             assert "total_vram_mib" in data
             assert "enabled" in data
+
+    def test_admin_max_processes_sorted(self):
+        """Admin endpoint must sort before applying max_processes."""
+        from llm_dashboard.web.admin_api import AdminAPIRoutes
+        app = Flask(__name__)
+        app.secret_key = "test"
+        AdminAPIRoutes(
+            config={"admin": {"enabled": True}, "gpu_processes": {"enable": True, "max_processes": 2},
+                    "services": {}, "start_stop": {}},
+            admin_login_required=lambda: True,
+            get_admin_services_status=lambda: {},
+            get_vram_status=lambda: {"enabled": False},
+            get_logs=lambda: {},
+            do_start_service=lambda k: {"success": True},
+            do_stop_service=lambda k: {"success": True},
+            stop_all_llm_engines=lambda: [],
+            _init_controller=lambda: MagicMock(),
+            _control_result_to_dict=lambda r: {"success": True},
+            get_gpu_processes=lambda: [
+                {"pid": 1, "used_vram_mib": 100},
+                {"pid": 2, "used_vram_mib": 900},
+                {"pid": 3, "used_vram_mib": 500},
+            ],
+        ).register(app)
+        with app.test_client() as client:
+            resp = client.get('/api/admin/gpu/processes')
+            data = resp.get_json()
+            assert data["count"] == 2
+            vrams = [p["used_vram_mib"] for p in data["processes"]]
+            assert vrams == [900, 500], f"Expected [900, 500] got {vrams}"

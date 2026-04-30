@@ -8,10 +8,11 @@ from flask import jsonify, Response
 
 def build_gpu_process_payload(processes: list[dict], enabled: bool = True) -> dict:
     """Construit le payload stable pour l'API GPU processes."""
+    from llm_dashboard.monitors.gpu.processes import process_vram_mib
     return {
         "processes": processes,
         "count": len(processes),
-        "total_vram_mib": sum(p.get("used_vram_mib", p.get("vram_mib", 0)) for p in processes),
+        "total_vram_mib": sum(process_vram_mib(p) for p in processes),
         "enabled": enabled,
     }
 
@@ -87,18 +88,18 @@ def create_metrics_endpoint(get_cpu_info, get_ram_info, get_gpu_info,
             lines.append('# TYPE gpu_process_memory_total_mib gauge')
             try:
                 all_procs = get_gpu_processes()
+                from llm_dashboard.monitors.gpu.processes import process_vram_mib as _pvram
 
-                # Aggregate per (gpu_index, vendor) and per vendor
                 count_by_gpu_vendor: dict[tuple, int] = {}
                 total_by_vendor: dict[str, float] = {}
 
                 for p in all_procs:
                     v = str(p.get("backend") or "unknown")
                     gpu_idx = str(p.get("gpu_index", "unknown"))
-                    vram = p.get("used_vram_mib", p.get("vram_mib", 0)) or 0
+                    vram = _pvram(p)
                     key = (gpu_idx, v)
                     count_by_gpu_vendor[key] = count_by_gpu_vendor.get(key, 0) + 1
-                    total_by_vendor[v] = total_by_vendor.get(v, 0.0) + float(vram)
+                    total_by_vendor[v] = total_by_vendor.get(v, 0.0) + vram
 
                 for (gpu_idx, vendor), count in sorted(count_by_gpu_vendor.items()):
                     lines.append(f'gpu_process_count{{gpu_index="{_escape_label(gpu_idx)}",vendor="{_escape_label(vendor)}"}} {count}')
@@ -112,12 +113,11 @@ def create_metrics_endpoint(get_cpu_info, get_ram_info, get_gpu_info,
                     gpu_idx = _escape_label(str(p.get("gpu_index", "unknown")))
                     svc = _escape_label(p.get("service_guess", "unknown"))
                     v = _escape_label(str(p.get("backend") or "unknown"))
-                    vram = p.get("used_vram_mib", p.get("vram_mib", 0))
                     lines.append(
                         f'gpu_process_memory_used_mib{{'
                         f'pid="{pid}",gpu_index="{gpu_idx}",'
                         f'process_name="{name}",service="{svc}",'
-                        f'vendor="{v}"}} {vram}'
+                        f'vendor="{v}"}} {_pvram(p)}'
                     )
             except Exception as exc:
                 import logging
