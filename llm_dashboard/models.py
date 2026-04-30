@@ -154,6 +154,29 @@ def normalize_services_config(config):
         )
         services.append(svc)
 
+    # Ajouter les entrees start_stop non mappees (services arbitraires)
+    mapped_keys = set(_SS_TO_SVC.keys())
+    for ss_key, ss_conf in ss_section.items():
+        if ss_key in mapped_keys:
+            continue
+        is_llm = ss_conf.get("is_llm", False)
+        svc = ServiceConfig(
+            key=ss_key,
+            display_name=ss_conf.get("display_name", ss_key),
+            backend="systemd" if ss_conf.get("systemd_unit") else "unknown",
+            role="llm" if is_llm else "auxiliary",
+            exclusive_group=None,
+            port=ss_conf.get("port"),
+            base_url=None,
+            health_endpoint="/",
+            start_command=tuple(ss_conf.get("start_command", [])),
+            stop_command=tuple(ss_conf.get("stop_command", [])),
+            systemd_unit=ss_conf.get("systemd_unit"),
+            vram_min_mib=ss_conf.get("vram_min_mib", 0),
+            allow_force_stop=config.get("admin", {}).get("allow_force_stop", False),
+        )
+        services.append(svc)
+
     return services
 
 

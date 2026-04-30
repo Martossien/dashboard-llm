@@ -25,10 +25,12 @@ from llm_dashboard.services.metrics import (
     get_ollama_models as _get_ollama_models_fn,
     get_llama_metrics as _get_llama_metrics_fn,
 )
-from llm_dashboard.services.ops import (
-    do_start_service as _do_start_service_fn,
-    do_stop_service as _do_stop_service_fn,
-    stop_all_llm_engines as _stop_all_llm_engines_fn,
+from llm_dashboard.services.factory import (
+    create_service_controller_from_config,
+    start_service_as_dict,
+    stop_service_as_dict,
+    stop_all_llm_as_dicts,
+    control_result_to_dict,
 )
 from llm_dashboard.monitors.gpu.monitor import GPUMonitor
 from llm_dashboard.monitors.logs import (
@@ -135,12 +137,22 @@ def create_runtime_dependencies(config: dict) -> RuntimeDependencies:
     get_vllm_timings = partial(_get_vllm_timings_fn, config)
     get_llama_timings = partial(_get_llama_timings_fn, config, get_active_log_file)
 
-    # Partial: admin / metrics / ops
+    # Partial: admin / metrics / ops (via ServiceController)
     get_ollama_models = partial(_get_ollama_models_fn, config)
     get_llama_metrics = partial(_get_llama_metrics_fn, config)
-    do_start = partial(_do_start_service_fn, config, runner, gpu_monitor)
-    do_stop = partial(_do_stop_service_fn, config, runner, gpu_monitor)
-    stop_all_llm = partial(_stop_all_llm_engines_fn, config, runner, gpu_monitor)
+
+    # Wrapper: ServiceController for lifecycle operations
+    def _make_controller():
+        return create_service_controller_from_config(config, runner, gpu_monitor)
+
+    def do_start(key: str) -> dict:
+        return start_service_as_dict(_make_controller(), key)
+
+    def do_stop(key: str) -> dict:
+        return stop_service_as_dict(_make_controller(), key)
+
+    def stop_all_llm() -> list[dict]:
+        return stop_all_llm_as_dicts(_make_controller())
 
     # Helpers GPU
     def get_gpu_info():
@@ -175,27 +187,10 @@ def create_runtime_dependencies(config: dict) -> RuntimeDependencies:
         return False
 
     def _create_controller():
-        services = normalize_services_config(config)
-        registry = ServiceRegistry(services)
-        allow_force_stop = config.get("admin", {}).get("allow_force_stop", True)
-        return ServiceController(
-            registry=registry,
-            runner=runner,
-            vram_checker=get_vram_status,
-            port_checker=check_port_free,
-            gpu_process_lister=get_gpu_processes,
-            active_key_getter=None,
-            allow_force_stop=allow_force_stop,
-        )
+        return create_service_controller_from_config(config, runner, gpu_monitor)
 
     def _control_result_to_dict(result):
-        return {
-            "success": result.success,
-            "message": result.message,
-            "stdout": result.stdout,
-            "stderr": result.stderr,
-            "killed_pids": list(result.killed_pids),
-        }
+        return control_result_to_dict(result)
 
     # Auth helpers
     def admin_login_required():
@@ -239,5 +234,5 @@ def create_runtime_dependencies(config: dict) -> RuntimeDependencies:
         admin_login_required=admin_login_required,
         check_admin_password=check_admin_password,
         create_controller=_create_controller,
-        control_result_to_dict=_control_result_to_dict,
+        control_result_to_dict=control_result_to_dict,
     )
