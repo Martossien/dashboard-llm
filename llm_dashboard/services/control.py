@@ -265,7 +265,8 @@ class ServiceController:
             logger.info("_kill_gpu_processes: no GPU processes found.")
             return []
 
-        big_procs = [p for p in processes if p.get("vram_mib", 0) >= threshold_mib]
+        big_procs = [p for p in processes if _process_vram_mib(p) >= threshold_mib]
+
         if not big_procs:
             logger.info("_kill_gpu_processes: no GPU process above %d MiB.", threshold_mib)
             return []
@@ -284,7 +285,7 @@ class ServiceController:
         # Survivants → SIGKILL
         survivors = self._gpu_process_lister()
         survivor_pids = {p["pid"] for p in survivors
-                        if p.get("vram_mib", 0) >= threshold_mib}
+                        if _process_vram_mib(p) >= threshold_mib}
         if survivor_pids:
             logger.warning("_kill_gpu_processes: %d processes survived SIGTERM",
                          len(survivor_pids))
@@ -296,53 +297,23 @@ class ServiceController:
         return pids_killed
 
 
-def create_service_controller_from_config(
-    config: dict,
-    runner,
-    gpu_monitor=None,
-    port_checker=None,
-):
-    """Cree un ServiceController a partir d'une config et d'un runner.
+# Backward-compatible import; canonical implementation lives in services.factory.
+from llm_dashboard.services.factory import create_service_controller_from_config  # noqa: F811
 
-    Args:
-        config: dictionnaire de configuration complet (avec start_stop, services, admin).
-        runner: instance CommandRunner.
-        gpu_monitor: instance GPUMonitor (optionnel, pour VRAM check et GPU processes).
-        port_checker: callable(port, timeout) -> bool (optionnel).
 
-    Returns:
-        ServiceController configure.
-    """
-    from llm_dashboard.models import normalize_services_config
-    from llm_dashboard.services.registry import ServiceRegistry
+def _process_vram_mib(proc: dict) -> float:
+    """Extrait la VRAM d'un dict processus (nouveau ou ancien schema)."""
+    try:
+        return float(proc.get("used_vram_mib", proc.get("vram_mib", 0)) or 0)
+    except (TypeError, ValueError):
+        return 0.0
 
-    services = normalize_services_config(config)
-    registry = ServiceRegistry(services)
-    allow_force_stop = config.get("admin", {}).get("allow_force_stop", False)
 
-    def _vram_checker():
-        if not gpu_monitor:
-            return {"enabled": False}
-        try:
-            return gpu_monitor.vram_status()
-        except Exception:
-            return {"enabled": False}
-
-    def _gpu_process_lister():
-        if not gpu_monitor:
-            return []
-        try:
-            return gpu_monitor.gpu_processes()
-        except Exception:
-            return []
-
-    return ServiceController(
-        registry=registry,
-        runner=runner,
-        vram_checker=_vram_checker,
-        port_checker=port_checker,
-        gpu_process_lister=_gpu_process_lister,
-        active_key_getter=None,
-        allow_force_stop=allow_force_stop,
+def _process_display_name(proc: dict) -> str:
+    """Extrait le nom affichable d'un processus (nouveau ou ancien schema)."""
+    return (
+        proc.get("process_name")
+        or proc.get("name")
+        or f"pid-{proc.get('pid', '?')}"
     )
 

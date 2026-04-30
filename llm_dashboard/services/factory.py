@@ -111,26 +111,24 @@ def force_stop_service_as_dict(controller: ServiceController, key: str) -> dict:
 
 
 def stop_all_llm_as_dicts(controller: ServiceController) -> list[dict]:
-    """Arrete tous les LLM d'un groupe exclusif et retourne une liste de dicts."""
+    """Arrete tous les LLM sans doublons (par groupe, puis individuel)."""
     results = []
-    # Utiliser stop_group pour chaque groupe exclusif contenant des LLM
+    processed_keys: set = set()
+
     for group in controller.registry.groups():
         services = controller.registry.by_group(group)
         llm_services = [s for s in services if s.role == "llm"]
         if llm_services:
             group_results = controller.stop_group(group)
             for r in group_results:
+                processed_keys.add(r.key)
                 results.append(control_result_to_dict(r))
 
-    # Fallback: arreter individuellement les LLM sans groupe
     for svc in controller.registry.llm_services():
+        if svc.key in processed_keys:
+            continue
         if svc.stop_command:
             result = controller.stop_service(svc.key)
-            results.append({
-                "key": svc.key,
-                "status": "stopped" if result.success else "failed",
-                "stdout": result.stdout,
-                "stderr": result.stderr,
-            })
+            results.append(control_result_to_dict(result))
 
     return results

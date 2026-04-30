@@ -177,9 +177,9 @@ class DashboardAPIRoute:
                 'model_on_8080': services_payload.get('model_on_8080'),
                 'ollama_models': get_ollama(),
                 'llama_metrics': get_llama_met(),
-                'gpu_processes': _get_gpu_processes_payload(),
-                'gpu_process_count': len(_get_gpu_processes_payload()),
-                'gpu_process_vram_total_mib': sum(p.get('used_vram_mib', 0) for p in _get_gpu_processes_payload()),
+                'gpu_processes': gpu_proc_payload,
+                'gpu_process_count': len(gpu_proc_payload),
+                'gpu_process_vram_total_mib': sum(p.get('used_vram_mib', 0) for p in gpu_proc_payload),
             })
 
         def _get_gpu_processes_payload():
@@ -192,8 +192,6 @@ class DashboardAPIRoute:
                 show_cmd = gp_config.get("show_command", True)
                 max_procs = gp_config.get("max_processes", 100)
                 raw = self._get_gpu_processes()
-                # If raw returns dicts with show_command support, use that
-                # Otherwise filter command client-side
                 processes = []
                 for p in raw:
                     entry = dict(p)
@@ -206,6 +204,8 @@ class DashboardAPIRoute:
             except Exception as e:
                 logger.error("get_gpu_processes failed in /api/data: %s", e)
                 return []
+
+        gpu_proc_payload = _get_gpu_processes_payload()
 
         def get_ollama():
             try:
