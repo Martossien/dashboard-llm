@@ -129,10 +129,6 @@ def create_full_app(
 
     app = _create_flask_app(config)
 
-    # Injecter get_llama_startup_state (depend de load_startup_stats)
-    from llm_dashboard.monitors.startup import get_llama_startup_state
-    deps.get_llama_startup_state = get_llama_startup_state
-
     register_routes(app, config, deps)
 
     if setup_signals:

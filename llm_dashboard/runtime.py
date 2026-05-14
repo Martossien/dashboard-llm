@@ -36,6 +36,7 @@ from llm_dashboard.monitors.logs import (
     get_client_ips as _get_client_ips_fn,
     _get_active_llama_log_file as _get_active_llama_log_file_fn,
 )
+from llm_dashboard.monitors.startup import get_llama_startup_state as _get_llama_startup_state_fn
 from llm_dashboard.monitors.timings import (
     get_llama_timings as _get_llama_timings_fn,
     get_vllm_timings as _get_vllm_timings_fn,
@@ -89,6 +90,7 @@ class RuntimeDependencies:
     get_llama_timings: Callable[[], tuple]
     get_vllm_timings: Callable[[], tuple]
     detect_model_name: Callable[[], str]
+    get_llama_startup_state: Callable[[], dict]
     get_ollama_models: Callable[[], list]
     get_llama_metrics: Callable[[], dict]
 
@@ -222,9 +224,10 @@ def create_runtime_dependencies(config: dict) -> RuntimeDependencies:
         get_client_ips=get_client_ips_fn,
         get_services_status=get_services_status,
         get_admin_services_status=get_admin_services_status,
+        detect_model_name=detect_model,
+        get_llama_startup_state=_get_llama_startup_state_fn,
         get_llama_timings=get_llama_timings,
         get_vllm_timings=get_vllm_timings,
-        detect_model_name=detect_model,
         get_ollama_models=get_ollama_models,
         get_llama_metrics=get_llama_metrics,
         do_start_service=do_start,
