@@ -1,0 +1,23 @@
+[Unit]
+Description=Dashboard LLM — Monitoring and administration for local LLM servers
+After=network.target nvidia-persistenced.service
+
+[Service]
+Type=simple
+User=%u
+Group=%u
+WorkingDirectory=%h/dashboard-llm
+Environment=DASHBOARD_CONFIG=%h/dashboard-llm/config.yaml
+Environment=DASHBOARD_HOST=0.0.0.0
+Environment=DASHBOARD_PORT=5001
+Environment=PATH=%h/.conda/envs/dashboard-llm/bin:/usr/bin:/bin
+Environment=HOME=%h
+ExecStart=%h/.conda/envs/dashboard-llm/bin/python -m llm_dashboard
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=dashboard-llm
+
+[Install]
+WantedBy=multi-user.target
