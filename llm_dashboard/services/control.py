@@ -65,8 +65,8 @@ class ServiceController:
         svc = self.registry.get(key)
         if svc is None:
             return ControlResult(key, False, f"Service inconnu: {key}")
-        if not svc.start_command:
-            return ControlResult(key, False, f"Pas de start_command pour: {key}")
+        if not svc.systemd_unit and not svc.start_command:
+            return ControlResult(key, False, f"Pas de systemd_unit ni start_command pour: {key}")
 
         # Verifier VRAM
         if svc.vram_min_mib > 0 and self._vram_checker:
@@ -86,7 +86,11 @@ class ServiceController:
                 self.stop_service(running_key)
                 time.sleep(3)
 
-        result = self.runner.systemctl_start(svc.systemd_unit or "", timeout=60)
+        # systemd prioritaire, puis start_command
+        if svc.systemd_unit:
+            result = self.runner.systemctl_start(svc.systemd_unit, timeout=60)
+        else:
+            result = self.runner.run_command(svc.start_command, timeout=60)
         if result.success:
             return ControlResult(key, True, f"Service {key} demarre.")
         return ControlResult(key, False,
@@ -98,13 +102,16 @@ class ServiceController:
         svc = self.registry.get(key)
         if svc is None:
             return ControlResult(key, False, f"Service inconnu: {key}")
-        if not svc.stop_command:
-            return ControlResult(key, False, f"Pas de stop_command pour: {key}")
+        if not svc.systemd_unit and not svc.stop_command:
+            return ControlResult(key, False, f"Pas de systemd_unit ni stop_command pour: {key}")
 
         port = svc.port or 0
 
         # Etape 1: systemctl stop
-        result = self.runner.systemctl_stop(svc.systemd_unit or "", timeout=15)
+        if svc.systemd_unit:
+            result = self.runner.systemctl_stop(svc.systemd_unit, timeout=15)
+        else:
+            result = self.runner.run_command(svc.stop_command, timeout=15)
         if not result.success:
             if "inactive" in result.stderr.lower() or "not loaded" in result.stderr.lower():
                 logger.info("stop_service(%s): already inactive.", key)

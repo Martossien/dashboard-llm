@@ -11,15 +11,16 @@
         <h1>Admin Panel — Controle des Services</h1>
         <div class="top-bar">
             <a href="/">Dashboard principal</a>
+            <a href="/admin/config">Configuration</a>
             <a href="/help">Aide</a>
             <a href="/admin/logout">Deconnexion</a>
         </div>
 
         <div class="notice">
-            <strong>Regle : un seul service LLM a la fois.</strong><br>
-            GLM-4.7, Qwen3.6-35B (Q8, UD-Q8) et Qwen3.6-27B vLLM partagent le port 8080.
-            Pour demarrer l'un, les autres doivent etre arretes.
-            Les services auxiliaires (Voxtral TTS/STT, Ollama) peuvent tourner simultanement.
+            <strong>Regle : un seul service LLM par groupe exclusif.</strong><br>
+            Les services partageant un meme groupe (<em>exclusive_group</em>)
+            sont mutuellement exclusifs : un seul peut etre actif a la fois.
+            Les services auxiliaires peuvent tourner simultanement.
         </div>
 
         <div class="global-bar">
@@ -70,13 +71,13 @@
 
         <!-- LLM Controls — Dropdown choix unique -->
         <div class="card" style="margin-bottom: 15px;">
-            <div class="card-title">&#9679; LLM Engine (Port 8080)</div>
+            <div class="card-title">&#9679; LLM Engine</div>
             <div class="meta">Un seul modele actif a la fois</div>
             <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 8px;">
                 <select class="llm-selector" id="llm-select">
                     <option value="" disabled selected>-- Choisir un modele --</option>
                     {% for key, svc in services.items() %}
-                    {% if svc.is_llm and svc.port == 8080 %}
+                    {% if svc.role == "llm" and svc.unit and svc.backend != "ollama" %}
                     <option value="{{ key }}" {% if svc.running %}selected{% endif %}>{{ svc.display_name }}</option>
                     {% endif %}
                     {% endfor %}
@@ -92,14 +93,14 @@
         <!-- Services Auxiliaires (cartes individuelles) -->
         <div class="grid" id="services-grid">
             {% for key, svc in services.items() %}
-            {% if not (svc.is_llm and svc.port == 8080) %}
+            {% if not (svc.role == "llm" and svc.unit and svc.backend != "ollama") %}
             <div class="card" data-key="{{ key }}">
                 <div class="card-title">
                     <span class="status-dot" id="dot-{{ key }}">&#9679;</span>
                     {{ svc.display_name }}
                 </div>
                 <div class="meta">
-                    Port: {{ svc.port }} | Unite: {{ svc.unit }} | Type: {{ "LLM" if svc.is_llm else "Auxiliaire" }}
+                    Port: {{ svc.port }} | Unite: {{ svc.unit }} | Type: {{ svc.role|capitalize }} | Status: {{ svc.health }}
                 </div>
                 <div class="button-row">
                     <button class="btn-start" id="start-btn-{{ key }}"

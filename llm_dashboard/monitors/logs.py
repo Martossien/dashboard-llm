@@ -10,7 +10,6 @@ import re
 from collections import deque
 
 from llm_dashboard.services.health import check_port_is_open
-from llm_dashboard.services.detection import find_ik_llama_process, find_llama_process
 
 logger = logging.getLogger("dashboard-llm.monitors.logs")
 
@@ -90,30 +89,43 @@ def read_journalctl_logs(unit: str, max_lines: int) -> list[str]:
 
 
 def _get_active_llama_log_file(config: dict, command_runner) -> str:
-    if not check_port_is_open("127.0.0.1", 8080, timeout=1):
-        return config["services"]["ik_llama_cpp"].get("log_file", "/var/log/launch_llm.log")
-    if find_ik_llama_process() is not None:
-        return config["services"]["ik_llama_cpp"].get("log_file", "/var/log/launch_llm.log")
-    for svc_key in ['qwen36_35b_q8', 'qwen36_35b_udq8']:
-        systemd_unit = config.get("start_stop", {}).get(svc_key, {}).get("systemd_unit", "")
-        if systemd_unit:
-            try:
-                result = command_runner.systemctl_is_active(systemd_unit, timeout=3)
-                if result.stdout.strip() == "active":
-                    log_file = config.get("start_stop", {}).get(svc_key, {}).get("log_file")
-                    if log_file and os.path.exists(log_file):
-                        return log_file
-            except Exception:
-                pass
-    if find_llama_process() is not None:
-        log_file_q8 = "/var/log/launch_arbitrage_q8.log"
-        log_file_udq8 = "/var/log/launch_arbitrage2.log"
-        if os.path.exists(log_file_udq8):
-            mtime_udq8 = os.path.getmtime(log_file_udq8)
-            if not os.path.exists(log_file_q8) or mtime_udq8 > os.path.getmtime(log_file_q8):
-                return log_file_udq8
-        return log_file_q8 if os.path.exists(log_file_q8) else log_file_udq8
-    return config["services"]["ik_llama_cpp"].get("log_file", "/var/log/launch_llm.log")
+    svc_services = config.get("services", {})
+
+    def _get_log(svc_key):
+        return svc_services.get(svc_key, {}).get("log_file", "")
+
+    for svc_key, svc_conf in svc_services.items():
+        if not isinstance(svc_conf, dict):
+            continue
+        port = _extract_port(svc_conf.get("base_url", ""))
+        if port and check_port_is_open("127.0.0.1", port, timeout=1):
+            process_patterns = svc_conf.get("process_patterns", [])
+            if process_patterns:
+                import psutil
+                for proc in psutil.process_iter(['cmdline']):
+                    cmd = ' '.join(proc.info.get('cmdline') or [])
+                    if any(p in cmd for p in process_patterns):
+                        log = svc_conf.get("log_file", "")
+                        if log and os.path.exists(log):
+                            return log
+            log = svc_conf.get("log_file", "")
+            if log and os.path.exists(log):
+                return log
+
+    for svc_key in svc_services:
+        log = _get_log(svc_key)
+        if log and os.path.exists(log):
+            return log
+    return ""
+
+
+def _extract_port(base_url):
+    if not base_url:
+        return None
+    try:
+        return int(base_url.rsplit(":", 1)[-1].rstrip("/"))
+    except (ValueError, IndexError):
+        return None
 
 
 def get_logs(config: dict, command_runner) -> dict:
@@ -130,10 +142,7 @@ def get_logs(config: dict, command_runner) -> dict:
                 lines = ["(no logs from journalctl unit {})".format(unit)]
             service_logs[svc_key] = lines
         else:
-            if svc_key == "llama_cpp":
-                log_file = _get_active_llama_log_file(config, command_runner)
-            else:
-                log_file = svc_conf.get("log_file")
+            log_file = svc_conf.get("log_file")
             if not log_file:
                 service_logs[svc_key] = ["(no log file configured)"]
                 continue
@@ -155,8 +164,13 @@ def get_logs(config: dict, command_runner) -> dict:
 
 
 def get_client_ips(config: dict) -> list[str]:
-    log_file = config["monitoring"].get("log_file", "/var/log/launch_llm.log")
-    if not os.path.exists(log_file):
+    log_file = config["monitoring"].get("log_file", "")
+    if not log_file:
+        for svc_conf in config.get("services", {}).values():
+            if isinstance(svc_conf, dict) and svc_conf.get("log_file"):
+                log_file = svc_conf["log_file"]
+                break
+    if not log_file or not os.path.exists(log_file):
         return []
     try:
         max_lines = config["monitoring"]["log_lines"]

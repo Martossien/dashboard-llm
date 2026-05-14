@@ -83,27 +83,27 @@ class CommandRunner:
         """Demarre un service systemd."""
         self._validate_unit(unit)
         return self._run(
-            ["systemctl", "start", unit],
+            ["sudo", "systemctl", "start", unit],
             timeout=timeout,
-            description=f"systemctl start {unit}",
+            description=f"sudo systemctl start {unit}",
         )
 
     def systemctl_stop(self, unit: str, timeout: int = 15) -> CommandResult:
         """Arrete un service systemd."""
         self._validate_unit(unit)
         return self._run(
-            ["systemctl", "stop", unit],
+            ["sudo", "systemctl", "stop", unit],
             timeout=timeout,
-            description=f"systemctl stop {unit}",
+            description=f"sudo systemctl stop {unit}",
         )
 
     def systemctl_kill(self, unit: str, timeout: int = 10) -> CommandResult:
         """Envoie un kill force a un service systemd."""
         self._validate_unit(unit)
         return self._run(
-            ["systemctl", "kill", unit],
+            ["sudo", "systemctl", "kill", unit],
             timeout=timeout,
-            description=f"systemctl kill {unit}",
+            description=f"sudo systemctl kill {unit}",
         )
 
     # ---- Commandes port/reseau ----
@@ -279,3 +279,11 @@ class CommandRunner:
                 stderr=str(e),
                 returncode=-1,
             )
+
+    def run_command(self, cmd: tuple[str, ...] | list[str], timeout: int = 30) -> CommandResult:
+        """Execute une commande arbitraire (liste d'arguments).
+        Wrapper public autour de _run.
+        """
+        cmd_list = list(cmd) if cmd else []
+        desc = ' '.join(cmd_list) if cmd_list else '(empty)'
+        return self._run(cmd_list, timeout, desc)

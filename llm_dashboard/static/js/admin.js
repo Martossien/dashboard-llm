@@ -9,7 +9,7 @@
         let isPolling = true;
         const LLM_KEYS = new Set((() => {
             const states = (window.ADMIN_INITIAL_STATE && window.ADMIN_INITIAL_STATE.services) || {};
-            return Object.keys(states).filter(k => states[k].is_llm);
+            return Object.keys(states).filter(k => states[k].role === "llm");
         })());
 
         function showToast(message, isError) {
@@ -185,29 +185,32 @@
             const serviceLogs = data.service_logs || {};
 
             for (const [key, svc] of Object.entries(services)) {
-                if (svc.is_llm && svc.port === 8080) {
+                if (svc.role === "llm" && svc.unit && svc.backend !== "ollama") {
                     if (svc.running) {
                         anyLLMRunning = true;
                         runningLLM = svc.display_name;
-                        // Stop timer if it finished starting
                         if (actionTimers['llm']) {
                             stopTimer('llm');
                         }
                     }
-                    continue;  // LLM port 8080 managed by dropdown
+                    continue;
                 }
                 const dot = document.getElementById('dot-' + key);
                 const btnStart = document.getElementById('start-btn-' + key);
                 const btnStop  = document.getElementById('stop-btn-' + key);
                 const btnForce = document.getElementById('force-btn-' + key);
-                if (dot) dot.style.color = svc.running ? '#238636' : '#da3633';
+                const statusColor = svc.health === 'UP' ? '#238636' 
+                    : svc.health === 'SLOW' ? '#d29922' 
+                    : svc.health === 'LOADING' ? '#d29922' 
+                    : '#da3633';
+                if (dot) dot.style.color = statusColor;
                 if (btnStart) btnStart.disabled = svc.running;
                 if (btnStop)  btnStop.disabled = !svc.running;
                 if (btnForce) btnForce.disabled = !svc.running;
                 if (svc.running) stopTimer(key);
             }
 
-            // Update dropdown state for LLM port 8080
+            // Update dropdown state for LLM exclusive group
             if (llmStart) llmStart.disabled = anyLLMRunning;
             if (llmRestart) llmRestart.disabled = !anyLLMRunning;
             if (llmStop) llmStop.disabled = !anyLLMRunning;

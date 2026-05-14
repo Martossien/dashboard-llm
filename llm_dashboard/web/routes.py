@@ -11,19 +11,14 @@ class WebRoutes:
     """Routes web simples du dashboard, sans logique metier."""
 
     def __init__(self, config: dict):
-        """Initialise avec une config (CONFIG dict).
-
-        Args:
-            config: dictionnaire de configuration complet du dashboard.
-        """
         self.config = config
 
     def register(self, app):
-        """Enregistre les routes sur l'application Flask."""
         config = self.config
 
         @app.route('/')
         def index():
+            service_keys = list(config.get("services", {}).keys())
             return render_template(
                 'dashboard.html',
                 refresh_interval_ms=config["monitoring"]["refresh_interval_ms"],
@@ -31,6 +26,7 @@ class WebRoutes:
                 vram_danger_percent=config["thresholds"]["vram_danger_percent"],
                 power_warning_percent=config["thresholds"]["power_warning_percent"],
                 power_danger_percent=config["thresholds"]["power_danger_percent"],
+                service_keys=service_keys,
             )
 
         @app.route('/health')
@@ -39,4 +35,7 @@ class WebRoutes:
 
         @app.route('/help')
         def help_page():
-            return render_template('help.html')
+            return render_template(
+                'help.html',
+                dashboard_port=config["server"]["port"],
+            )

@@ -154,12 +154,12 @@ def register_public_api(app, get_cpu_info, get_ram_info, get_gpu_info,
     @app.route('/api/v1/services')
     def public_services():
         svc_status = get_services_status()
+        active_services = svc_status.get("active_services", {})
+        models_by_group = svc_status.get("models_by_group", {})
         return jsonify({
             "services": svc_status.get("services", {}),
-            "active_on_ports": {
-                "8080": svc_status.get("active_on_8080"),
-            },
-            "model_on_8080": svc_status.get("model_on_8080"),
+            "active_services_by_group": active_services,
+            "models_by_group": models_by_group,
         })
 
     @app.route('/api/v1/metrics')

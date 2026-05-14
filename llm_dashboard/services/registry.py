@@ -121,9 +121,9 @@ class ServiceRegistry:
             raise ValueError("ServiceConfig.key must not be empty")
         if not svc.display_name:
             raise ValueError(f"ServiceConfig.display_name must not be empty (key={svc.key})")
-        if svc.role not in ("llm", "auxiliary", "dashboard"):
+        if svc.role not in ("llm", "auxiliary", "dashboard", "project"):
             raise ValueError(
-                f"ServiceConfig.role must be 'llm', 'auxiliary' or 'dashboard', "
+                f"ServiceConfig.role must be 'llm', 'auxiliary', 'dashboard' or 'project', "
                 f"got '{svc.role}' (key={svc.key})"
             )
         if not svc.backend:

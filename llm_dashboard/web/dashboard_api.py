@@ -1,7 +1,7 @@
 """
 Dashboard API route — /api/data.
 
-Pas d'import depuis monitor.py.
+Portable : tous les noms de service, backends et groupes sont extraits dynamiquement de la config.
 """
 
 from __future__ import annotations
@@ -14,9 +14,19 @@ from flask import Flask, jsonify
 from llm_dashboard.monitors.gpu.processes import process_vram_mib
 
 
-class DashboardAPIRoute:
-    """Route /api/data — endpoint JSON principal du dashboard."""
+def _get_service_name(config, key):
+    svc = config.get("services", {}).get(key, {})
+    return svc.get("name", key) if isinstance(svc, dict) else key
 
+
+def _find_service_key_by_role(config, role):
+    for k, v in config.get("services", {}).items():
+        if isinstance(v, dict) and v.get("role") == role:
+            return k
+    return None
+
+
+class DashboardAPIRoute:
     def __init__(self, config: dict,
                  get_cpu_info: Callable[[], dict],
                  get_ram_info: Callable[[], dict],
@@ -28,13 +38,10 @@ class DashboardAPIRoute:
                  get_logs: Callable[[], dict],
                  get_client_ips: Callable[[], list],
                  detect_model_name: Callable[[], str],
-                 find_ik_llama_process: Callable[[], dict | None],
-                 find_llama_process: Callable[[], dict | None],
                  logger: logging.Logger | None = None,
                  get_ollama_models: Callable[[], list] | None = None,
                  get_llama_metrics: Callable[[], dict] | None = None,
                  get_gpu_processes: Callable[[], list] | None = None):
-        ...
         self._config = config
         self._get_cpu = get_cpu_info
         self._get_ram = get_ram_info
@@ -46,8 +53,6 @@ class DashboardAPIRoute:
         self._get_logs = get_logs
         self._get_ips = get_client_ips
         self._detect_model = detect_model_name
-        self._find_ik = find_ik_llama_process
-        self._find_llama = find_llama_process
         self._logger = logger or logging.getLogger("dashboard-llm")
         self._get_ollama_models = get_ollama_models or (lambda: [])
         self._get_llama_metrics = get_llama_metrics or (lambda: {})
@@ -65,8 +70,6 @@ class DashboardAPIRoute:
         get_logs = self._get_logs
         get_ips = self._get_ips
         detect_model = self._detect_model
-        find_ik = self._find_ik
-        find_llama = self._find_llama
         logger = self._logger
         get_ollama = self._get_ollama_models
         get_llama_met = self._get_llama_metrics
@@ -77,26 +80,50 @@ class DashboardAPIRoute:
                 services_payload = get_services()
             except Exception as e:
                 logger.error("get_services_status failed: %s", e)
-                services_payload = {
-                    'services': {svc["name"]: 'DOWN' for svc in config["services"].values()},
-                    'llama_latency_seconds': None, 'slots_active': None,
-                    'slots_total': None, 'active_on_8080': None, 'model_on_8080': None,
-                }
-            active_on_8080 = services_payload.get('active_on_8080')
+                services_payload = {'services': {}, 'llama_latency_seconds': None,
+                                    'slots_active': None, 'slots_total': None,
+                                    'active_on_8080': None, 'model_on_8080': None,
+                                    'active_services': {}, 'models_by_group': {}}
 
-            ik_name = config["services"]["ik_llama_cpp"]["name"]
-            llama_name = config["services"]["llama_cpp"]["name"]
-            vllm_name = config["services"]["vllm"]["name"]
+            active_on_8080 = services_payload.get('active_on_8080')
+            active_services = services_payload.get('active_services', {})
+            models_by_group = services_payload.get('models_by_group', {})
+
+            # Noms dynamiques des services (backward compat)
+            ik_key = None
+            llama_key = None
+            vllm_key = None
+            for k, v in config.get("services", {}).items():
+                if isinstance(v, dict):
+                    backend = v.get("backend", "")
+                    if backend == "vllm":
+                        vllm_key = k
+                    elif backend in ("llama.cpp",):
+                        llama_key = k
+                    elif backend in ("ik_llama.cpp",):
+                        ik_key = k
+            if not ik_key:
+                ik_key = next((k for k, v in config.get("services", {}).items()
+                               if isinstance(v, dict) and v.get("role") == "llm"), "ik_llama_cpp")
+            if not llama_key:
+                llama_key = "llama_cpp"
+            if not vllm_key:
+                vllm_key = "vllm"
+
+            ik_name = _get_service_name(config, ik_key)
+            llama_name = _get_service_name(config, llama_key)
+            vllm_name = _get_service_name(config, vllm_key)
 
             active_llama_name = None
-            if active_on_8080 == 'ik_llama_cpp':
-                active_llama_name = ik_name
-            elif active_on_8080 == 'llama_cpp':
-                active_llama_name = llama_name
+            if active_on_8080 in (ik_key, llama_key):
+                active_llama_name = _get_service_name(config, active_on_8080)
+            elif active_on_8080 in config.get("services", {}):
+                active_llama_name = _get_service_name(config, active_on_8080)
 
-            llama_health = services_payload['services'].get(
+            llama_health = services_payload.get('services', {}).get(
                 active_llama_name or llama_name) if active_llama_name else None
             llama_latency = services_payload.get('llama_latency_seconds')
+
             try:
                 startup_state = get_startup(llama_health)
             except Exception as e:
@@ -104,29 +131,30 @@ class DashboardAPIRoute:
                 startup_state = {"state": "DOWN", "loading_seconds": None,
                                  "eta_seconds": None, "avg_seconds": None}
 
-            if active_on_8080 in ('ik_llama_cpp', 'llama_cpp') or active_on_8080 is None:
+            # Status du service actif avec latence/timings
+            if active_on_8080 in (ik_key, llama_key) or active_on_8080 is None:
                 if active_llama_name:
-                    llama_health = services_payload['services'].get(active_llama_name, 'DOWN')
+                    llama_health = services_payload.get('services', {}).get(active_llama_name, 'DOWN')
                 llama_status = llama_health
-                if startup_state['state'] == 'LOADING':
+                if startup_state.get('state') == 'LOADING':
                     llama_status = 'LOADING'
                 elif llama_health == 'UP' and isinstance(llama_latency, (int, float)):
                     llama_status = 'SLOW' if llama_latency >= 5.0 else 'UP'
-                elif llama_health and llama_health != 'UP':
-                    has_proc = find_ik() if active_on_8080 == 'ik_llama_cpp' else find_llama()
-                    llama_status = 'UNRESPONSIVE' if has_proc else 'DOWN'
                 if active_llama_name:
-                    services_payload['services'][active_llama_name] = llama_status
+                    services_payload.setdefault('services', {})[active_llama_name] = llama_status
             else:
                 startup_state = {"state": "DOWN", "loading_seconds": None,
                                  "eta_seconds": None, "avg_seconds": None}
 
             llama_pr, llama_gr = None, None
             vllm_pr, vllm_gr = None, None
+            service_token_rates = {}
             try:
-                if active_on_8080 in ('ik_llama_cpp', 'llama_cpp') or active_on_8080 is None:
+                from llm_dashboard.monitors.timings import get_services_token_rates
+                service_token_rates = get_services_token_rates(config)
+                if active_on_8080 in (ik_key, llama_key) or active_on_8080 is None:
                     llama_pr, llama_gr = get_llama_timings()
-                elif active_on_8080 == 'vllm':
+                elif active_on_8080 == vllm_key:
                     vllm_pr, vllm_gr = get_vllm_timings()
             except Exception as e:
                 logger.error("get_llama/vllm_timings failed: %s", e)
@@ -150,8 +178,8 @@ class DashboardAPIRoute:
                 model_name = 'Unknown'
 
             svc_names = {}
-            for k, v in config["services"].items():
-                svc_names[k] = v["name"]
+            for k, v in config.get("services", {}).items():
+                svc_names[k] = v.get("name", k) if isinstance(v, dict) else k
 
             try:
                 gpu_proc_payload = _gpu_process_payload()
@@ -160,11 +188,11 @@ class DashboardAPIRoute:
 
             return jsonify({
                 'cpu': get_cpu(), 'ram': get_ram(), 'gpus': get_gpu(),
-                'services': services_payload['services'],
-                'slots_active': services_payload['slots_active'],
-                'slots_total': services_payload['slots_total'],
+                'services': services_payload.get('services', {}),
+                'slots_active': services_payload.get('slots_active'),
+                'slots_total': services_payload.get('slots_total'),
                 'service_logs': service_logs,
-                'service_order': list(config["services"].keys()),
+                'service_order': list(config.get("services", {}).keys()),
                 'service_names': svc_names,
                 'model_name': model_name,
                 'prompt_tokens_per_second': llama_pr,
@@ -176,14 +204,17 @@ class DashboardAPIRoute:
                 'ik_llama_service_name': ik_name,
                 'vllm_service_name': vllm_name,
                 'active_llama_service_name': active_llama_name,
-                'llama_state': startup_state['state'],
-                'llama_loading_seconds': startup_state['loading_seconds'],
-                'llama_eta_seconds': startup_state['eta_seconds'],
-                'llama_avg_load_seconds': startup_state['avg_seconds'],
+                'llama_state': startup_state.get('state', 'DOWN'),
+                'llama_loading_seconds': startup_state.get('loading_seconds'),
+                'llama_eta_seconds': startup_state.get('eta_seconds'),
+                'llama_avg_load_seconds': startup_state.get('avg_seconds'),
                 'active_on_8080': active_on_8080,
                 'model_on_8080': services_payload.get('model_on_8080'),
+                'active_services': active_services,
+                'models_by_group': models_by_group,
                 'ollama_models': get_ollama(),
                 'llama_metrics': get_llama_met(),
+                'service_token_rates': service_token_rates,
                 'gpu_processes': gpu_proc_payload,
                 'gpu_process_count': len(gpu_proc_payload),
                 'gpu_process_vram_total_mib': sum(process_vram_mib(p) for p in gpu_proc_payload),

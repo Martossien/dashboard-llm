@@ -45,7 +45,8 @@
             font-size: 12px;
             font-weight: bold;
         }
-        .btn-start { background: #238636; color: white; }
+        .status-dot { color: #da3633; margin-right: 6px; font-size: 14px; }
+    .btn-start { background: #238636; color: white; }
         .btn-start:hover { background: #2ea043; }
         .btn-start:disabled { background: #2ea043; opacity: 0.4; cursor: not-allowed; }
         .btn-stop { background: #da3633; color: white; }

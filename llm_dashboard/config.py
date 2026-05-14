@@ -1,8 +1,8 @@
 """
 Configuration — chargement, validation, surcharges d'environnement.
 
-Extrait de monitor.py (Lot 2).
-Fonctions pures ou quasi pures, sans dependance Flask ni GPU.
+Configuration portable : les services sont definis UNIQUEMENT dans config.yaml.
+Aucun nom de service, port, backend, modele ou chemin de fichier n'est hardcode.
 """
 
 from __future__ import annotations
@@ -14,7 +14,6 @@ from typing import Any, Optional, Union
 
 logger = logging.getLogger("dashboard-llm.config")
 
-# import conditionnel (PyYAML est optionnel)
 try:
     import yaml
 except Exception:
@@ -22,7 +21,7 @@ except Exception:
 
 
 # ============================================================================
-# Configuration par defaut
+# Configuration par defaut — minimal, aucun service hardcode
 # ============================================================================
 
 DEFAULT_CONFIG = {
@@ -33,59 +32,11 @@ DEFAULT_CONFIG = {
     },
     "monitoring": {
         "refresh_interval_ms": 1000,
-        "log_file": "/var/log/launch_llm.log",
+        "log_file": "",
         "log_lines": 50,
         "log_block_bytes": 8192,
     },
-    "services": {
-        "ik_llama_cpp": {
-            "name": "ik_llama.cpp",
-            "base_url": "http://127.0.0.1:8080",
-            "health_endpoint": "/health",
-            "models_endpoint": "/v1/models",
-            "timeout_seconds": 2,
-            "log_file": "/var/log/launch_llm.log",
-        },
-        "llama_cpp": {
-            "name": "llama.cpp",
-            "base_url": "http://127.0.0.1:8080",
-            "health_endpoint": "/health",
-            "models_endpoint": "/v1/models",
-            "timeout_seconds": 2,
-            "log_file": "/var/log/launch_arbitrage_q8.log",
-        },
-        "vllm": {
-            "name": "vLLM Qwen3.6-27B",
-            "base_url": "http://127.0.0.1:8080",
-            "health_endpoint": "/health",
-            "models_endpoint": "/v1/models",
-            "timeout_seconds": 2,
-            "log_file": "/var/log/vllm_qwen36_27b.log",
-        },
-        "ollama": {
-            "name": "Ollama",
-            "base_url": "http://127.0.0.1:11434",
-            "health_endpoint": "/",
-            "timeout_seconds": 2,
-            "log_type": "journalctl",
-            "journalctl_unit": "ollama",
-            "journalctl_lines": 50,
-        },
-        "voxtral": {
-            "name": "Voxtral-web (TTS)",
-            "base_url": "http://127.0.0.1:6060",
-            "health_endpoint": "/healthz",
-            "log_file": "/opt/voxtral-web/logs/voxtral-web.log",
-            "timeout_seconds": 2,
-        },
-        "voxtral_stt": {
-            "name": "Voxtral-WebUI (STT)",
-            "base_url": "http://127.0.0.1:7860",
-            "health_endpoint": "/",
-            "timeout_seconds": 2,
-            "log_file": "/root/Voxtral-WebUI/app.log",
-        },
-    },
+    "services": {},
     "gpu": {
         "enable": True,
     },
@@ -93,8 +44,13 @@ DEFAULT_CONFIG = {
         "cache_seconds": 5,
         "cache_grace_seconds": 30,
         "process_scan_interval_seconds": 30,
-        "process_keywords": ["ik_llama", "server"],
+        "process_keywords": ["llama", "server", "vllm", "python"],
         "model_arg_flags": ["-m", "--model"],
+        "backend_detection": True,
+    },
+    "paths": {
+        "load_stats": "llama_load_stats.json",
+        "vllm_pid_file": "",
     },
     "thresholds": {
         "vram_warning_percent": 70,
@@ -123,29 +79,6 @@ ENV_OVERRIDES = {
     "DASHBOARD_LOG_FILE": ("monitoring", "log_file"),
     "DASHBOARD_LOG_LINES": ("monitoring", "log_lines"),
     "DASHBOARD_LOG_BLOCK_BYTES": ("monitoring", "log_block_bytes"),
-    "DASHBOARD_LLAMA_URL": ("services", "llama_cpp", "base_url"),
-    "DASHBOARD_LLAMA_HEALTH_ENDPOINT": ("services", "llama_cpp", "health_endpoint"),
-    "DASHBOARD_LLAMA_MODELS_ENDPOINT": ("services", "llama_cpp", "models_endpoint"),
-    "DASHBOARD_LLAMA_TIMEOUT": ("services", "llama_cpp", "timeout_seconds"),
-    "DASHBOARD_OLLAMA_URL": ("services", "ollama", "base_url"),
-    "DASHBOARD_OLLAMA_HEALTH_ENDPOINT": ("services", "ollama", "health_endpoint"),
-    "DASHBOARD_OLLAMA_TIMEOUT": ("services", "ollama", "timeout_seconds"),
-    "DASHBOARD_OLLAMA_LOG_TYPE": ("services", "ollama", "log_type"),
-    "DASHBOARD_OLLAMA_JOURNALCTL_UNIT": ("services", "ollama", "journalctl_unit"),
-    "DASHBOARD_OLLAMA_JOURNALCTL_LINES": ("services", "ollama", "journalctl_lines"),
-    "DASHBOARD_VLLM_URL": ("services", "vllm", "base_url"),
-    "DASHBOARD_VLLM_HEALTH_ENDPOINT": ("services", "vllm", "health_endpoint"),
-    "DASHBOARD_VLLM_MODELS_ENDPOINT": ("services", "vllm", "models_endpoint"),
-    "DASHBOARD_VLLM_TIMEOUT": ("services", "vllm", "timeout_seconds"),
-    "DASHBOARD_VLLM_LOG_FILE": ("services", "vllm", "log_file"),
-    "DASHBOARD_VOXTRAL_URL": ("services", "voxtral", "base_url"),
-    "DASHBOARD_VOXTRAL_HEALTH_ENDPOINT": ("services", "voxtral", "health_endpoint"),
-    "DASHBOARD_VOXTRAL_LOG_FILE": ("services", "voxtral", "log_file"),
-    "DASHBOARD_VOXTRAL_TIMEOUT": ("services", "voxtral", "timeout_seconds"),
-    "DASHBOARD_VOXTRAL_STT_URL": ("services", "voxtral_stt", "base_url"),
-    "DASHBOARD_VOXTRAL_STT_HEALTH_ENDPOINT": ("services", "voxtral_stt", "health_endpoint"),
-    "DASHBOARD_VOXTRAL_STT_LOG_FILE": ("services", "voxtral_stt", "log_file"),
-    "DASHBOARD_VOXTRAL_STT_TIMEOUT": ("services", "voxtral_stt", "timeout_seconds"),
     "DASHBOARD_GPU_ENABLE": ("gpu", "enable"),
     "DASHBOARD_MODEL_CACHE_SECONDS": ("model_detection", "cache_seconds"),
     "DASHBOARD_MODEL_CACHE_GRACE_SECONDS": ("model_detection", "cache_grace_seconds"),
@@ -163,6 +96,8 @@ ENV_OVERRIDES = {
     "DASHBOARD_GPU_PROCESSES_ENABLE": ("gpu_processes", "enable"),
     "DASHBOARD_GPU_PROCESSES_SHOW_COMMAND": ("gpu_processes", "show_command"),
     "DASHBOARD_GPU_PROCESSES_MAX": ("gpu_processes", "max_processes"),
+    "DASHBOARD_PATHS_LOAD_STATS": ("paths", "load_stats"),
+    "DASHBOARD_PATHS_VLLM_PID_FILE": ("paths", "vllm_pid_file"),
 }
 
 
@@ -171,7 +106,6 @@ ENV_OVERRIDES = {
 # ============================================================================
 
 def deep_update(target: dict, updates: dict) -> None:
-    """Fusion recursive : updates est merge dans target (modifie en place)."""
     for key, value in updates.items():
         if isinstance(value, dict) and isinstance(target.get(key), dict):
             deep_update(target[key], value)
@@ -180,7 +114,6 @@ def deep_update(target: dict, updates: dict) -> None:
 
 
 def parse_bool(value: Union[bool, str, int]) -> bool:
-    """Parse une valeur booleenne (bool, str, int)."""
     if isinstance(value, bool):
         return value
     value = str(value).strip().lower()
@@ -192,14 +125,12 @@ def parse_bool(value: Union[bool, str, int]) -> bool:
 
 
 def parse_list(value: Union[list, str]) -> list:
-    """Parse une liste (list existante ou str separee par des virgules)."""
     if isinstance(value, list):
         return value
     return [item.strip() for item in str(value).split(",") if item.strip()]
 
 
 def get_nested(config: dict, path: tuple) -> Any:
-    """Accede a une valeur imbriquee dans un dict via un chemin de tuples."""
     current = config
     for key in path:
         current = current[key]
@@ -207,7 +138,6 @@ def get_nested(config: dict, path: tuple) -> Any:
 
 
 def set_nested(config: dict, path: tuple, value: Any) -> None:
-    """Definit une valeur imbriquee, en creant les dicts intermediaires."""
     current = config
     for key in path[:-1]:
         current = current.setdefault(key, {})
@@ -215,7 +145,6 @@ def set_nested(config: dict, path: tuple, value: Any) -> None:
 
 
 def get_default(path: tuple) -> Any:
-    """Retourne la valeur par defaut pour un chemin de config donne."""
     return get_nested(DEFAULT_CONFIG, path)
 
 
@@ -224,7 +153,6 @@ def get_default(path: tuple) -> Any:
 # ============================================================================
 
 def apply_env_overrides(config: dict) -> None:
-    """Applique les surcharges de variables d'environnement sur la config."""
     for env_key, path in ENV_OVERRIDES.items():
         if env_key not in os.environ:
             continue
@@ -246,20 +174,27 @@ def apply_env_overrides(config: dict) -> None:
             logger.warning("Invalid env override %s=%r (%s)", env_key, raw_value, exc)
 
 
+def _safe_get_nested(config: dict, path: tuple) -> Optional[Any]:
+    try:
+        return get_nested(config, path)
+    except (KeyError, TypeError):
+        return None
+
+
 def validate_config(config: dict) -> None:
-    """Valide la configuration et remplace les valeurs invalides par les defauts."""
+    _validate_global(config)
+    _validate_services(config)
+    _validate_lists(config)
+    _validate_admin(config)
+    _validate_gpu_processes(config)
+
+
+def _validate_global(config: dict) -> None:
     checks = [
         (("server", "port"), int, 1, 65535),
         (("monitoring", "refresh_interval_ms"), int, 100, 60000),
         (("monitoring", "log_lines"), int, 1, 2000),
         (("monitoring", "log_block_bytes"), int, 1024, 1048576),
-        (("services", "ik_llama_cpp", "timeout_seconds"), (int, float), 0.1, 60),
-        (("services", "llama_cpp", "timeout_seconds"), (int, float), 0.1, 60),
-        (("services", "vllm", "timeout_seconds"), (int, float), 0.1, 60),
-        (("services", "ollama", "timeout_seconds"), (int, float), 0.1, 60),
-        (("services", "ollama", "journalctl_lines"), int, 1, 500),
-        (("services", "voxtral", "timeout_seconds"), (int, float), 0.1, 60),
-        (("services", "voxtral_stt", "timeout_seconds"), (int, float), 0.1, 60),
         (("model_detection", "cache_seconds"), int, 1, 300),
         (("model_detection", "cache_grace_seconds"), int, 1, 600),
         (("model_detection", "process_scan_interval_seconds"), int, 1, 600),
@@ -268,7 +203,6 @@ def validate_config(config: dict) -> None:
         (("thresholds", "power_warning_percent"), int, 1, 100),
         (("thresholds", "power_danger_percent"), int, 1, 100),
     ]
-
     for path, expected_type, minimum, maximum in checks:
         value = _safe_get_nested(config, path)
         if value is None:
@@ -281,64 +215,41 @@ def validate_config(config: dict) -> None:
             logger.warning("Out of range value for %s, using default", ".".join(path))
             set_nested(config, path, get_default(path))
 
-    _validate_urls(config)
-    _validate_endpoints(config)
-    _validate_lists(config)
-    _validate_admin(config)
-    _validate_gpu_processes(config)
+
+def _validate_services(config: dict) -> None:
+    services = config.get("services", {})
+    if isinstance(services, dict):
+        for svc_key, svc_conf in services.items():
+            if not isinstance(svc_conf, dict):
+                continue
+            _validate_service(config, svc_key, svc_conf)
 
 
-def _safe_get_nested(config: dict, path: tuple) -> Optional[Any]:
-    """get_nested qui retourne None si le chemin n'existe pas (pour validation)."""
-    try:
-        return get_nested(config, path)
-    except (KeyError, TypeError):
-        return None
+def _validate_service(config: dict, svc_key: str, svc_conf: dict) -> None:
+    if not isinstance(svc_conf.get("timeout_seconds"), (int, float)):
+        svc_conf["timeout_seconds"] = 2
+        logger.warning("services.%s.timeout_seconds invalid, set to 2", svc_key)
+    elif svc_conf["timeout_seconds"] < 0.1:
+        svc_conf["timeout_seconds"] = 2
 
+    base_url = svc_conf.get("base_url", "")
+    if base_url and not isinstance(base_url, str):
+        svc_conf["base_url"] = ""
+    elif base_url and not base_url.startswith(("http://", "https://")):
+        logger.warning("services.%s.base_url does not start with http(s)://", svc_key)
 
-def _validate_urls(config: dict) -> None:
-    """Valide les URLs de base des services."""
-    url_paths = [
-        ("services", "ik_llama_cpp", "base_url"),
-        ("services", "llama_cpp", "base_url"),
-        ("services", "ollama", "base_url"),
-        ("services", "voxtral", "base_url"),
-        ("services", "vllm", "base_url"),
-        ("services", "voxtral_stt", "base_url"),
-    ]
-    for path in url_paths:
-        value = _safe_get_nested(config, path)
-        if value is None:
-            continue
-        if not isinstance(value, str) or not value.startswith(("http://", "https://")):
-            logger.warning("Invalid URL for %s, using default", ".".join(path))
-            set_nested(config, path, get_default(path))
+    for ep in ("health_endpoint", "models_endpoint"):
+        ep_val = svc_conf.get(ep)
+        if ep_val is not None and not (isinstance(ep_val, str) and (ep_val.startswith("/") or ep_val == "")):
+            svc_conf[ep] = "/health" if ep == "health_endpoint" else "/v1/models"
 
-
-def _validate_endpoints(config: dict) -> None:
-    """Valide les health/model endpoints (doivent commencer par /)."""
-    endpoint_paths = [
-        ("services", "ik_llama_cpp", "health_endpoint"),
-        ("services", "ik_llama_cpp", "models_endpoint"),
-        ("services", "llama_cpp", "health_endpoint"),
-        ("services", "llama_cpp", "models_endpoint"),
-        ("services", "ollama", "health_endpoint"),
-        ("services", "vllm", "health_endpoint"),
-        ("services", "vllm", "models_endpoint"),
-        ("services", "voxtral", "health_endpoint"),
-        ("services", "voxtral_stt", "health_endpoint"),
-    ]
-    for path in endpoint_paths:
-        value = _safe_get_nested(config, path)
-        if value is None:
-            continue
-        if not isinstance(value, str) or not value.startswith("/"):
-            logger.warning("Invalid endpoint for %s, using default", ".".join(path))
-            set_nested(config, path, get_default(path))
+    jc_lines = svc_conf.get("journalctl_lines")
+    if jc_lines is not None:
+        if not isinstance(jc_lines, int) or jc_lines < 1:
+            svc_conf["journalctl_lines"] = 50
 
 
 def _validate_lists(config: dict) -> None:
-    """Valide les champs de type liste."""
     list_paths = [
         ("model_detection", "process_keywords"),
         ("model_detection", "model_arg_flags"),
@@ -353,7 +264,6 @@ def _validate_lists(config: dict) -> None:
 
 
 def _validate_admin(config: dict) -> None:
-    """Valide la section admin."""
     import re
     for key in ("enabled", "allow_force_stop", "csrf_enabled"):
         value = _safe_get_nested(config, ("admin", key))
@@ -368,7 +278,6 @@ def _validate_admin(config: dict) -> None:
 
 
 def _validate_gpu_processes(config: dict) -> None:
-    """Valide la section gpu_processes."""
     for key in ("enable", "show_command"):
         value = _safe_get_nested(config, ("gpu_processes", key))
         if value is not None and not isinstance(value, bool):
@@ -382,15 +291,6 @@ def _validate_gpu_processes(config: dict) -> None:
 
 
 def load_config(config_path: Optional[str] = None) -> dict:
-    """Charge la configuration depuis un fichier YAML, avec surcharges env.
-
-    Args:
-        config_path: chemin vers config.yaml. Si None, utilise DASHBOARD_CONFIG
-                     ou le defaut (/opt/dashboard-llm/config.yaml).
-
-    Returns:
-        dict: configuration complete, fusionnee avec les defaults et validee.
-    """
     config = deepcopy(DEFAULT_CONFIG)
 
     if config_path is None:

@@ -8,7 +8,8 @@ import getpass
 import os
 import sys
 
-CONFIG_PATH = "/opt/dashboard-llm/config.yaml"
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+CONFIG_PATH = os.path.join(SCRIPT_DIR, "config.yaml")
 BAK_SUFFIX = ".backup.change_password"
 
 def read_config():
@@ -51,17 +52,24 @@ def update_password_hash(new_hash):
     write_config("\n".join(new_lines))
 
 def restart_service():
-    try:
-        print("Redemarrage de dashboard-llm.service...")
-        ret = os.system("systemctl restart dashboard-llm.service")
+    if os.path.exists("/etc/systemd/system/dashboard-llm.service"):
+        print("Redemarrage via systemctl...")
+        ret = os.system("sudo systemctl restart dashboard-llm.service")
         if ret != 0:
-            print("AVERTISSEMENT: le redemarrage du service a retourne un code != 0.")
+            print("AVERTISSEMENT: systemctl restart a retourne un code != 0.")
             return False
-        print("Service redemarre avec succes.")
+        print("Service dashboard-llm redemarre via systemctl.")
         return True
-    except Exception as exc:
-        print(f"AVERTISSEMENT: erreur lors du redemarrage: {exc}")
-        return False
+    else:
+        print("Pas de service systemd, redemarrage manuel...")
+        ret = os.system("pkill -f 'python -m llm_dashboard'; sleep 2; "
+                         "cd " + SCRIPT_DIR + " && "
+                         "nohup conda run -n dashboard-llm python -m llm_dashboard > /tmp/dashboard-llm.log 2>&1 &")
+        if ret != 0:
+            print("AVERTISSEMENT: erreur lors du redemarrage manuel.")
+            return False
+        print("Dashboard redemarre manuellement.")
+        return True
 
 def main():
     print("=" * 60)
@@ -88,11 +96,14 @@ def main():
     # Generer le hash
     try:
         from werkzeug.security import generate_password_hash
-        new_hash = generate_password_hash(pwd1)
     except ImportError:
-        print("ERREUR: werkzeug non installe. Essayez:")
-        print("  /opt/dashboard-llm/venv/bin/pip install werkzeug")
+        conda_python = os.path.expanduser("~/.conda/envs/dashboard-llm/bin/python")
+        if os.path.exists(conda_python):
+            print("Re-execution dans conda env dashboard-llm...")
+            os.execv(conda_python, [conda_python, __file__])
+        print("ERREUR: werkzeug non installe.")
         sys.exit(1)
+    new_hash = generate_password_hash(pwd1)
 
     # Mettre a jour le fichier
     update_password_hash(new_hash)
@@ -101,11 +112,14 @@ def main():
 
     # Demander redemarrage
     print("")
-    ans = input("Redemarrer le service dashboard-llm maintenant ? [O/n]: ").strip().lower()
-    if ans in ("", "o", "y", "yes", "oui"):
+    try:
+        ans = input("Redemarrer le service dashboard-llm maintenant ? [O/n]: ").strip().lower()
+    except EOFError:
+        ans = ""
+    if ans in ("", "o", "y", "yes", "oui", "o/n"):
         restart_service()
     else:
-        print("Redemarrage saute. Pensez a faire: systemctl restart dashboard-llm.service")
+        print("Redemarrage saute. Relancez avec: sudo systemctl restart dashboard-llm")
 
     print("")
     print("Termine.")

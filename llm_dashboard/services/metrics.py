@@ -45,14 +45,17 @@ def get_ollama_models(config: dict) -> list:
 
 
 def get_llama_metrics(config: dict) -> dict:
-    svc = config.get("services", {}).get("ik_llama_cpp", {})
-    if not svc.get("base_url"):
-        return {}
-    url = join_url(svc["base_url"], "/metrics")
-    try:
-        resp = _requests.get(url, timeout=2)
-        if resp.status_code == 200:
-            return _parse_prometheus_metrics(resp.text)
-    except Exception:
-        pass
+    services = config.get("services", {})
+    for svc_key, svc_conf in services.items():
+        if not isinstance(svc_conf, dict):
+            continue
+        if not svc_conf.get("base_url"):
+            continue
+        url = join_url(svc_conf["base_url"], "/metrics")
+        try:
+            resp = _requests.get(url, timeout=2)
+            if resp.status_code == 200:
+                return _parse_prometheus_metrics(resp.text)
+        except Exception:
+            continue
     return {}

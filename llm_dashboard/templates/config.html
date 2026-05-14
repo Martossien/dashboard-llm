@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Configuration — Dashboard LLM</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/admin.css') }}">
+    <style>
+        .config-page { max-width: 950px; margin: 0 auto; }
+        .config-tabs { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
+        .config-tab {
+            padding: 10px 24px; border-radius: 6px 6px 0 0; cursor: pointer;
+            border: 1px solid #30363d; border-bottom: none; color: #8b949e;
+            font-size: 13px; font-weight: bold; background: #0d1117; transition: all .15s;
+        }
+        .config-tab.active { color: #58a6ff; border-color: #58a6ff; background: #161b22; }
+        .config-tab:hover { color: #c9d1d9; }
+        .config-panel { display: none; border: 1px solid #30363d; border-radius: 0 6px 6px 6px;
+                        padding: 20px; background: #0d1117; min-height: 300px; }
+        .config-panel.active { display: block; }
+        .audit-section { margin-bottom: 18px; }
+        .audit-section h4 { color: #58a6ff; font-size: 13px; margin: 0 0 6px 0; text-transform: uppercase; letter-spacing: 0.5px; }
+        .audit-item { display: inline-block; margin: 2px 8px 2px 0; padding: 3px 10px; border-radius: 4px;
+                       font-size: 12px; background: #161b22; border: 1px solid #30363d; }
+        .audit-item.found { border-color: #238636; color: #3fb950; }
+        .audit-item.missing { border-color: #30363d; color: #6e7681; }
+        .btn-scan { padding: 12px 32px; font-size: 14px; }
+        .form-group { margin-bottom: 12px; }
+        .form-group label { display: block; font-size: 12px; color: #8b949e; margin-bottom: 4px; font-weight: bold; }
+        .form-group label .info { color: #58a6ff; cursor: help; margin-left: 4px; }
+        .form-group input, .form-group select { width: 100%; max-width: 500px; padding: 8px 10px;
+            background: #0d1117; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9;
+            font-size: 13px; font-family: inherit; }
+        .form-group input:focus, .form-group select:focus { outline: none; border-color: #58a6ff; }
+        .suggestions { margin-top: 4px; display: flex; gap: 6px; flex-wrap: wrap; }
+        .suggestion { font-size: 11px; padding: 2px 8px; background: #161b22; border-radius: 3px;
+                       border: 1px dashed #30363d; color: #58a6ff; cursor: pointer; }
+        .suggestion:hover { border-color: #58a6ff; }
+        .svc-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        .svc-table th { text-align: left; padding: 8px 6px; border-bottom: 1px solid #30363d; color: #8b949e; }
+        .svc-table td { padding: 8px 6px; border-bottom: 1px solid #21262d; vertical-align: middle; }
+        .svc-table .health-up { color: #3fb950; font-weight: bold; }
+        .svc-table .health-down { color: #f85149; }
+        .badge-llm { background: #1f6feb33; color: #58a6ff; padding: 2px 8px; border-radius: 3px; font-size: 11px; }
+        .badge-project { background: #d2992233; color: #d29922; padding: 2px 8px; border-radius: 3px; font-size: 11px; }
+        .badge-aux { background: #30363d; color: #8b949e; padding: 2px 8px; border-radius: 3px; font-size: 11px; }
+        .btn-xs { padding: 3px 10px; font-size: 11px; margin: 1px; }
+        .btn-danger { background: #da3633; color: #fff; border: none; border-radius: 4px; cursor: pointer; }
+        .btn-danger:hover { background: #f85149; }
+        .systemd-preview { background: #161b22; border: 1px solid #30363d; border-radius: 4px;
+            padding: 12px; margin-top: 8px; font-family: monospace; font-size: 11px; white-space: pre; max-height: 300px; overflow-y: auto; color: #c9d1d9; }
+        .toast { position: fixed; bottom: 20px; right: 20px; padding: 12px 24px; border-radius: 6px;
+                 font-size: 13px; z-index: 9999; transition: opacity .3s; }
+        .toast.success { background: #238636; color: #fff; }
+        .toast.error { background: #da3633; color: #fff; }
+        .tooltip-text { font-size: 11px; color: #6e7681; margin-top: 2px; font-style: italic; }
+    </style>
+</head>
+<body>
+<div class="container config-page">
+    <div class="top-bar">
+        <a href="/">Dashboard</a>
+        <a href="/admin/panel">Admin Panel</a>
+        <a href="/help">Aide</a>
+        <a href="/admin/logout">Deconnexion</a>
+    </div>
+
+    <h1 style="margin-bottom: 6px;">Configuration</h1>
+<p style="color: #8b949e; font-size: 12px; margin-bottom: 18px;">
+    Auditez votre machine, ajoutez des services et gerez la configuration.
+    <strong>Cliquez</strong> sur un backend, modele ou port dans l'audit pour pre-remplir le formulaire.
+    <strong>Sauvegardez</strong> pour ecrire config.yaml et redemarrer le dashboard.
+</p>
+
+    <div class="config-tabs">
+        <div class="config-tab active" data-tab="audit" onclick="switchTab('audit')">🔍 Audit machine</div>
+        <div class="config-tab" data-tab="add" onclick="switchTab('add')">➕ Ajouter un service</div>
+        <div class="config-tab" data-tab="services" onclick="switchTab('services')">📋 Services actuels</div>
+    </div>
+
+    <!-- AUDIT -->
+    <div class="config-panel active" id="panel-audit">
+        <p style="color: #8b949e; font-size: 12px; margin-bottom: 12px;">
+            Scanne la machine pour detecter les backends installes, les modeles, les conda envs, les ports ouverts et les services systemd.
+        </p>
+        <button class="btn-start btn-scan" onclick="doAudit()">🔄 Scanner la machine</button>
+        <div id="audit-results" style="margin-top: 18px;"></div>
+    </div>
+
+    <!-- ADD SERVICE -->
+    <div class="config-panel" id="panel-add">
+        <div class="form-group">
+            <label>Cle du service <span class="info" title="Identifiant unique. Ex: vllm_qwen27b">&#9432;</span></label>
+            <input type="text" id="svc-key" placeholder="vllm_qwen27b" required>
+            <div class="tooltip-text">Ex: vllm_qwen27b, llama_heretic, claude_code_proxy</div>
+        </div>
+
+        <div class="form-group">
+            <label>Role <span class="info" title="LLM = charge un modele et consomme VRAM. Projet = utilise l'API LLM.">&#9432;</span></label>
+            <select id="svc-role"><option value="llm">LLM Engine</option><option value="project">Projet</option><option value="auxiliary">Auxiliaire</option></select>
+        </div>
+
+        <div class="form-group" id="group-backend">
+            <label>Backend (chargeur) <span class="info" title="Le logiciel qui charge le modele. Chaque backend a des parametres par defaut.">&#9432;</span></label>
+            <select id="svc-backend" onchange="onBackendChange()">
+                <option value="vllm">vLLM</option><option value="llama.cpp">llama.cpp</option>
+                <option value="ik_llama.cpp">ik_llama.cpp</option><option value="sglang">SGLang</option>
+                <option value="ollama">Ollama</option><option value="lmstudio">LM Studio</option>
+                <option value="proxy">Proxy/API</option><option value="gradio">Gradio/WebUI</option>
+            </select>
+            <div class="tooltip-text" id="backend-info"></div>
+        </div>
+
+        <div class="form-group">
+            <label>Nom affiche <span class="info" title="Le nom visible dans le dashboard. Ex: Qwen3.6-27B (vLLM BF16)">&#9432;</span></label>
+            <input type="text" id="svc-name" placeholder="Qwen3.6-27B (vLLM BF16)">
+        </div>
+
+        <div class="form-group">
+            <label>Port <span class="info" title="Port TCP du service. Le dashboard verifie s'il est libre.">&#9432;</span></label>
+            <input type="number" id="svc-port" placeholder="8002" min="1024" max="65535">
+        </div>
+
+        <div class="form-group">
+            <label>Base URL <span class="info" title="URL pour contacter le service. Ex: http://127.0.0.1:8002">&#9432;</span></label>
+            <input type="text" id="svc-url" placeholder="http://127.0.0.1:8002">
+        </div>
+
+        <div class="form-group">
+            <label>Systemd unit <span class="info" title="Nom du service systemd pour start/stop. Ex: vllm-qwen27b.service">&#9432;</span></label>
+            <input type="text" id="svc-unit" placeholder="vllm-qwen27b.service">
+            <div class="suggestions"><span class="suggestion" onclick="suggestUnit()">Generer nom automatique</span></div>
+        </div>
+
+        <div class="form-group" id="group-model">
+            <label>Chemin du modele <span class="info" title="Fichier GGUF (premier shard si sharde) ou dossier HuggingFace. Cliquez sur un modele dans l'Audit pour pre-remplir.">&#9432;</span></label>
+            <input type="text" id="svc-model" placeholder="~/models/MonModele.gguf">
+            <div class="tooltip-text">Pour les modeles shardes (ex: -00001-of-00005.gguf), pointez vers le premier fichier.</div>
+        </div>
+
+        <div class="form-group" id="group-exec">
+            <label>Commande de lancement (ExecStart) <span class="info" title="Modifiez librement. Ce texte sera l'ExecStart du fichier systemd. Pre-rempli avec un template par defaut.">&#9432;</span></label>
+            <textarea id="svc-exec-start" rows="8" style="width:100%;max-width:700px;padding:10px;background:#0d1117;border:1px solid #30363d;border-radius:4px;color:#c9d1d9;font-family:monospace;font-size:12px;" placeholder="vllm serve /path/to/model --port 8002 ..."></textarea>
+            <div class="tooltip-text">Modifiez les flags selon vos besoins. Les backslashes (\) sont optionnels.</div>
+        </div>
+
+        <div class="form-group">
+            <label>Log file <span class="info" title="Chemin du fichier de log du service.">&#9432;</span></label>
+            <input type="text" id="svc-logfile" placeholder="/var/log/mon_service.log">
+        </div>
+
+        <div class="form-group" id="group-exclusive">
+            <label>Groupe exclusif <span class="info" title="Services partageant un port. Laisser vide si independant.">&#9432;</span></label>
+            <input type="text" id="svc-group" placeholder="llm_8030">
+            <div class="tooltip-text">Ex: llm_8030 pour les services partageant le port 8030</div>
+        </div>
+
+        <div style="display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap; align-items: center;">
+            <button class="btn-start" onclick="previewYaml()">👁 Apercu YAML</button>
+            <button class="btn-start" onclick="doAddService()">💾 Sauvegarder</button>
+            <button class="btn-start" onclick="doGenerateSystemd()" id="btn-gen-systemd">📄 Generer .service</button>
+            <button class="btn-stop" onclick="doInstallSystemd()" id="btn-install-systemd">📥 Installer le service</button>
+            <span id="add-status" style="font-size:12px; color:#8b949e;"></span>
+        </div>
+
+        <div class="systemd-preview" id="yaml-preview" style="display:none;"></div>
+        <div class="systemd-preview" id="systemd-preview" style="display:none;"></div>
+    </div>
+
+    <!-- SERVICES -->
+    <div class="config-panel" id="panel-services">
+        <p style="color: #8b949e; font-size: 12px; margin-bottom: 12px;">
+            Liste des services definis dans config.yaml. Cliquez sur un nom pour le charger dans l'onglet Ajouter.
+        </p>
+        <div id="services-table"></div>
+    </div>
+</div>
+
+<div id="toast" class="toast" style="display:none;"></div>
+
+<script>
+window.ADMIN_CONFIG = {
+    csrfToken: {{ csrf_token | tojson }},
+    csrfHeader: {{ csrf_header | tojson }}
+};
+window.DASHBOARD_PORT = {{ dashboard_port }};
+</script>
+<script src="{{ url_for('static', filename='js/config.js') }}"></script>
+</body>
+</html>

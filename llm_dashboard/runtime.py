@@ -15,8 +15,6 @@ from typing import Any, Callable, Optional
 from llm_dashboard.services.commands import CommandRunner
 from llm_dashboard.services.detection import (
     detect_model_name as _detect_model_name,
-    _get_active_llama_key as _get_active_llama_key_fn,
-    get_llama_status as _get_llama_status_fn,
     get_services_status as _get_services_status_fn,
     get_admin_services_status as _get_admin_services_status_fn,
 )
@@ -203,8 +201,9 @@ def create_runtime_dependencies(config: dict) -> RuntimeDependencies:
         import werkzeug.security
         default_hash = "pbkdf2:sha256:260000$ndkvw7ryKFNx99Am$b8f6b66a2f536fa1010bb72c3b7c48cb4b8e82c7a05be16401cc37ca2a95f90c"
         expected_hash = config.get("admin", {}).get("password_hash", default_hash)
-        if not expected_hash.startswith("pbkdf2:"):
-            logger.warning("admin.password_hash is not a pbkdf2 hash — refusing plaintext comparison.")
+        if not any(expected_hash.startswith(prefix + ":")
+                   for prefix in ("pbkdf2", "scrypt", "bcrypt", "sha256")):
+            logger.warning("admin.password_hash is not a werkzeug hash — refusing comparison.")
             return False
         return werkzeug.security.check_password_hash(expected_hash, str(password))
 

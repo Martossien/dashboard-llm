@@ -80,6 +80,7 @@
         powerWarningPercent: {{ power_warning_percent }},
         powerDangerPercent: {{ power_danger_percent }}
     };
+    window.DASHBOARD_SERVICE_KEYS = {{ service_keys | tojson }};
     </script>
     <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
 </body>

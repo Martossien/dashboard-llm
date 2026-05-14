@@ -1,5 +1,8 @@
 """
-Service detection — identification du modele actif et du service sur un port.
+Service detection — identification de service actif, modeles, groupes exclusifs.
+
+Les fonctions de detection sont pilotees par la config. Aucun port, backend,
+modele ou pattern de processus n'est hardcode.
 """
 
 from __future__ import annotations
@@ -9,6 +12,7 @@ import os as _os
 import psutil as _psutil
 import requests as _requests
 import time as _time
+import re as _re
 
 from llm_dashboard.services.health import check_port_is_open, check_service_health
 
@@ -16,29 +20,19 @@ _logger = logging.getLogger("dashboard-llm.detection")
 
 
 def join_url(base_url: str, endpoint: str) -> str:
-    """Concatene une base_url et un endpoint en gerant les slashes.
-
-    >>> join_url("http://127.0.0.1:8080", "/health")
-    'http://127.0.0.1:8080/health'
-    >>> join_url("http://127.0.0.1:8080/", "health")
-    'http://127.0.0.1:8080/health'
-    """
     return base_url.rstrip("/") + "/" + endpoint.lstrip("/")
 
 
 def match_model(model_name: str | None, pattern: str | None) -> bool:
-    """Verifie si un nom de modele correspond a un pattern de detection."""
     if not pattern or not model_name:
         return False
-    import re
-    return bool(re.search(pattern, model_name))
+    return bool(_re.search(pattern, model_name))
 
 
 def guess_service_from_model(
     model_name: str | None,
     services: list,
 ) -> str | None:
-    """Determine quelle cle de service correspond au nom de modele detecte."""
     if not model_name:
         return None
     for svc in services:
@@ -48,99 +42,150 @@ def guess_service_from_model(
     return None
 
 
-def find_ik_llama_process() -> dict | None:
-    try:
-        for proc in _psutil.process_iter(['pid', 'name', 'cmdline', 'create_time']):
-            cmdline = proc.info.get('cmdline') or []
-            cmdline_str = ' '.join(cmdline)
-            if 'ik_llama' in cmdline_str or ('llama-server' in cmdline_str and 'GLM' in cmdline_str):
-                return proc.info
-    except Exception as exc:
-        _logger.debug("Failed to scan for ik_llama process: %s", exc)
-    return None
+# ============================================================================
+# Detection de processus generique (pilotee par config)
+# ============================================================================
 
+def find_process_for_service(svc) -> dict | None:
+    """Trouve un processus correspondant aux patterns de processus du service.
 
-def find_llama_process() -> dict | None:
-    try:
-        for proc in _psutil.process_iter(['pid', 'name', 'cmdline', 'create_time']):
-            cmdline = proc.info.get('cmdline') or []
-            cmdline_str = ' '.join(cmdline)
-            if 'llama-server' in cmdline_str and 'ik_llama' not in cmdline_str and 'GLM' not in cmdline_str:
-                return proc.info
-    except Exception as exc:
-        _logger.debug("Failed to scan for llama-server process: %s", exc)
-    return None
+    Args:
+        svc: ServiceConfig avec process_patterns et process_exclude_patterns
 
+    Returns:
+        dict de proc.info ou None
+    """
+    patterns = svc.process_patterns
+    excludes = svc.process_exclude_patterns
+    pid_file = svc.pid_file
 
-def find_vllm_process() -> dict | None:
-    try:
-        if _os.path.exists("/root/.vllm_qwen36_27b.pid"):
-            with open("/root/.vllm_qwen36_27b.pid", "r") as f:
+    if pid_file and _os.path.exists(pid_file):
+        try:
+            with open(pid_file, "r") as f:
                 pid_str = f.read().strip()
             if pid_str:
                 pid = int(pid_str)
                 if _psutil.pid_exists(pid):
                     return {'pid': pid, 'create_time': _psutil.Process(pid).create_time()}
+        except Exception:
+            pass
+
+    if not patterns:
+        return None
+
+    try:
         for proc in _psutil.process_iter(['pid', 'name', 'cmdline', 'create_time']):
             cmdline = proc.info.get('cmdline') or []
-            if any('vllm serve' in ' '.join(cmdline)) or any('VLLM::EngineCore' in (proc.info.get('name') or '')):
+            cmdline_str = ' '.join(cmdline)
+            if any(p in cmdline_str for p in patterns):
+                if excludes and any(e in cmdline_str for e in excludes):
+                    continue
                 return proc.info
     except Exception as exc:
-        _logger.debug("Failed to scan for vllm process: %s", exc)
+        _logger.debug("Failed to scan for process (patterns=%s): %s", patterns, exc)
     return None
 
 
+def find_ik_llama_process():
+    """Compatibilite retroactive pour les tests et appels existants.
+    Cherche les processus ik_llama.cpp generiquement.
+    """
+    try:
+        for proc in _psutil.process_iter(['pid', 'name', 'cmdline', 'create_time']):
+            cmdline_str = ' '.join(proc.info.get('cmdline') or [])
+            if 'ik_llama' in cmdline_str or ('llama-server' in cmdline_str and 'GLM' in cmdline_str):
+                return proc.info
+    except Exception:
+        pass
+    return None
+
+
+def find_llama_process():
+    """Compatibilite retroactive — cherche llama-server sans ik_llama ni GLM."""
+    try:
+        for proc in _psutil.process_iter(['pid', 'name', 'cmdline', 'create_time']):
+            cmdline_str = ' '.join(proc.info.get('cmdline') or [])
+            if ('llama-server' in cmdline_str
+                    and 'ik_llama' not in cmdline_str
+                    and 'GLM' not in cmdline_str):
+                return proc.info
+    except Exception:
+        pass
+    return None
+
+
+def find_vllm_process(config=None):
+    """Cherche un processus vLLM (via pid_file ou scan de processus)."""
+    pid_file = ""
+    if config:
+        pid_file = config.get("paths", {}).get("vllm_pid_file", "")
+    if pid_file and _os.path.exists(pid_file):
+        try:
+            with open(pid_file, "r") as f:
+                pid = int(f.read().strip())
+            if _psutil.pid_exists(pid):
+                return {'pid': pid, 'create_time': _psutil.Process(pid).create_time()}
+        except Exception:
+            pass
+    try:
+        for proc in _psutil.process_iter(['pid', 'name', 'cmdline', 'create_time']):
+            cmdline_str = ' '.join(proc.info.get('cmdline') or [])
+            name = proc.info.get('name') or ''
+            if ('vllm serve' in cmdline_str) or ('VLLM::EngineCore' in name):
+                return proc.info
+    except Exception:
+        pass
+    return None
+
+
+# ============================================================================
+# Detection de modele
+# ============================================================================
+
 def detect_model_name(config: dict, model_cache: dict) -> str:
-    """Detecte le nom du modele actif. Prend config et model_cache en parametres."""
     model_name = None
     now = _time.time()
     cache_grace_seconds = config["model_detection"]["cache_grace_seconds"]
+
     if model_cache['name'] and now - model_cache['last_check'] < config["model_detection"]["cache_seconds"]:
         _logger.debug("detect_model_name: returning cached name=%s", model_cache['name'])
         return model_cache['name']
-    try:
-        if find_ik_llama_process() is not None:
-            svc_key = 'ik_llama_cpp'
-        elif find_llama_process() is not None:
-            svc_key = 'llama_cpp'
-        else:
-            svc_key = 'ik_llama_cpp'
-        svc_conf = config["services"].get(svc_key, config["services"]["ik_llama_cpp"])
-        url = join_url(svc_conf["base_url"], svc_conf["models_endpoint"])
-        timeout_seconds = svc_conf["timeout_seconds"]
-        _logger.info("detect_model_name: querying %s (timeout=%.1fs)", url, min(timeout_seconds, 1.0))
-        response = _requests.get(url, timeout=min(timeout_seconds, 1.0))
-        _logger.info("detect_model_name: response status=%d", response.status_code)
-        if response.status_code == 200:
-            data = response.json()
-            if 'data' in data and len(data['data']) > 0:
-                model_name = data['data'][0].get('id', None)
-                _logger.info("detect_model_name: found model from API: %s", model_name)
-            else:
-                _logger.info("detect_model_name: API returned 200 but no model data")
-        else:
-            _logger.info("detect_model_name: API returned status %d", response.status_code)
-    except _requests.exceptions.Timeout:
-        _logger.warning("detect_model_name: API request timed out")
-    except _requests.exceptions.ConnectionError as e:
-        _logger.info("detect_model_name: connection error: %s", e)
-    except Exception as e:
-        _logger.warning("detect_model_name: error: %s", e)
-    finally:
-        model_cache['last_check'] = now
 
-    if not model_name and now - model_cache['last_process_scan'] >= config["model_detection"]["process_scan_interval_seconds"]:
-        _logger.info("detect_model_name: scanning processes (keywords=%s)", config["model_detection"]["process_keywords"])
+    # Essayer /v1/models sur tous les services configures qui ont l'endpoint
+    services = config.get("services", {})
+    for svc_key, svc_conf in services.items():
+        if not svc_conf.get("models_endpoint"):
+            continue
+        try:
+            url = join_url(svc_conf["base_url"], svc_conf["models_endpoint"])
+            timeout = min(svc_conf.get("timeout_seconds", 2), 2)
+            resp = _requests.get(url, timeout=timeout)
+            if resp.status_code == 200:
+                data = resp.json()
+                if 'data' in data and len(data['data']) > 0:
+                    model_name = data['data'][0].get('id', '')
+                    _logger.info("detect_model_name: found %s from %s", model_name, svc_key)
+                    break
+        except Exception:
+            continue
+
+    model_cache['last_check'] = now
+
+    # Fallback: scan de processus
+    if not model_name and now - model_cache.get('last_process_scan', 0) >= config["model_detection"]["process_scan_interval_seconds"]:
+        _logger.info("detect_model_name: scanning processes")
         try:
             for proc in _psutil.process_iter(['pid', 'name', 'cmdline']):
                 try:
                     cmdline = proc.info['cmdline']
                     keywords = config["model_detection"]["process_keywords"]
+                    flags = config["model_detection"]["model_arg_flags"]
                     if cmdline and any(keyword in c for c in cmdline for keyword in keywords):
                         for i, arg in enumerate(cmdline):
-                            if arg in config["model_detection"]["model_arg_flags"] and i + 1 < len(cmdline):
+                            if arg in flags and i + 1 < len(cmdline):
                                 model_name = cmdline[i + 1]
-                                _logger.info("detect_model_name: found model from process %d: %s", proc.info['pid'], model_name)
+                                _logger.info("detect_model_name: found from process %d: %s",
+                                             proc.info['pid'], model_name)
                                 break
                         if model_name:
                             break
@@ -153,237 +198,240 @@ def detect_model_name(config: dict, model_cache: dict) -> str:
     if model_name:
         model_cache['name'] = model_name
         model_cache['last_check'] = now
-        _logger.info("detect_model_name: final result: %s", model_name)
         return model_name
+
     if model_cache['name']:
         if now - model_cache['last_check'] > cache_grace_seconds:
-            _logger.info("detect_model_name: grace period expired, clearing cache")
             model_cache['name'] = None
             return 'Checking...'
-        _logger.debug("detect_model_name: returning grace-cached name=%s", model_cache['name'])
         return model_cache['name']
-    _logger.info("detect_model_name: no model found, returning Unknown")
+
     return 'Unknown'
 
 
-def _get_active_llama_key(config: dict, command_runner) -> str:
-    try:
-        url = join_url(
-            config["services"]["llama_cpp"]["base_url"],
-            config["services"]["llama_cpp"]["models_endpoint"],
-        )
-        response = _requests.get(url, timeout=1.0)
-        if response.status_code == 200:
-            data = response.json()
-            if 'data' in data and len(data['data']) > 0:
-                model_id = data['data'][0].get('id', '').lower()
-                if 'glm' in model_id or 'ik_llama' in model_id:
-                    return 'ik_llama_cpp'
-                return 'llama_cpp'
-    except Exception:
-        pass
-    if find_ik_llama_process() is not None:
-        return 'ik_llama_cpp'
-    for svc_key in ['qwen36_35b_q8', 'qwen36_35b_udq8']:
-        systemd_unit = config.get("start_stop", {}).get(svc_key, {}).get("systemd_unit", "")
-        if systemd_unit:
-            try:
-                result = command_runner.systemctl_is_active(systemd_unit, timeout=3)
-                if result.stdout.strip() == "active":
-                    return 'llama_cpp'
-            except Exception:
-                pass
-    if find_llama_process() is not None:
-        return 'llama_cpp'
-    return 'llama_cpp'
+# ============================================================================
+# Service status — base sur les groupes exclusifs
+# ============================================================================
 
+def get_services_status(config: dict, command_runner=None) -> dict:
+    """Retourne le statut de tous les services, avec gestion des groupes exclusifs.
 
-def get_llama_status(config: dict, command_runner) -> tuple[str, float | None, int | None, int | None]:
-    status = 'DOWN'
-    latency = None
-    slots_active = None
-    slots_total = None
-    svc_key = _get_active_llama_key(config, command_runner) if check_port_is_open("127.0.0.1", 8080, timeout=1) else 'ik_llama_cpp'
-    svc_conf = config["services"].get(svc_key, config["services"]["ik_llama_cpp"])
-    try:
-        url = join_url(svc_conf["base_url"], svc_conf["health_endpoint"])
-        timeout_seconds = svc_conf["timeout_seconds"]
-        start = _time.time()
-        response = _requests.get(url, timeout=timeout_seconds)
-        latency = _time.time() - start
-        if response.status_code < 400:
-            status = 'UP'
-        if response.status_code == 200:
-            data = response.json()
-            slots_processing = data.get('slots_processing')
-            slots_idle = data.get('slots_idle')
-            if isinstance(slots_processing, int) and isinstance(slots_idle, int):
-                slots_active = slots_processing
-                slots_total = slots_processing + slots_idle
-    except Exception as e:
-        _logger.debug("get_llama_status error: %s", e)
-    return status, latency, slots_active, slots_total
+    Pour chaque groupe exclusif, un seul service peut etre UP.
+    La detection utilise /v1/models pour identifier le service actif.
+    """
+    services = config.get("services", {})
+    service_statuses = {}
+    group_active = {}       # group_name -> active_service_key
+    group_models = {}       # group_name -> model_id on that port
+    group_latencies = {}    # group_name -> latency
+    group_slots = {}        # group_name -> (slots_active, slots_total)
 
+    # Construire la liste des groupes exclusifs
+    groups = {}
+    for svc_key, svc_conf in services.items():
+        grp = svc_conf.get("exclusive_group") if isinstance(svc_conf, dict) else None
+        if grp:
+            groups.setdefault(grp, []).append(svc_key)
 
-def get_services_status(config: dict, command_runner) -> dict:
-    port_8080_status, port_8080_latency, slots_active, slots_total = get_llama_status(config, command_runner)
-    model_on_8080 = None
-    active_on_8080 = None
+    # Pour chaque groupe, trouver le service actif
+    for grp_name, member_keys in groups.items():
+        if not member_keys:
+            continue
+        ref_svc = services[member_keys[0]]
+        port = ref_svc.get("port") or _extract_port(ref_svc.get("base_url", ""))
 
-    if port_8080_status == 'UP':
-        try:
-            url = join_url(
-                config["services"]["llama_cpp"]["base_url"],
-                config["services"]["llama_cpp"]["models_endpoint"],
-            )
-            response = _requests.get(url, timeout=1.0)
-            if response.status_code == 200:
-                data = response.json()
-                if 'data' in data and len(data['data']) > 0:
-                    model_on_8080 = data['data'][0].get('id', '')
-        except Exception:
-            pass
+        if port and check_port_is_open("127.0.0.1", port, timeout=1):
+            # Port ouvert — interroger /v1/models pour identifier le service
+            models_ep = ref_svc.get("models_endpoint", "/v1/models")
+            base_url = ref_svc.get("base_url", "")
+            model_id = None
+            if base_url and models_ep:
+                try:
+                    url = join_url(base_url, models_ep)
+                    resp = _requests.get(url, timeout=2)
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        if 'data' in data and len(data['data']) > 0:
+                            model_id = data['data'][0].get('id', '')
+                except Exception:
+                    pass
 
-    has_ik_llama = find_ik_llama_process() is not None
-    has_llama = find_llama_process() is not None
-    has_vllm = find_vllm_process() is not None
+            # Trouver quel membre du groupe correspond au modele detecte
+            active_key = None
+            for key in member_keys:
+                svc = services[key]
+                pattern = svc.get("model_detect_pattern") if isinstance(svc, dict) else None
+                if model_id and pattern and match_model(model_id, pattern):
+                    active_key = key
+                    break
 
-    if port_8080_status == 'UP':
-        if has_vllm or (model_on_8080 and 'qwen36' in model_on_8080.lower() and 'ik_llama' not in model_on_8080.lower() and 'glm' not in model_on_8080.lower()):
-            active_on_8080 = 'vllm'
-        elif has_ik_llama and (model_on_8080 is None or 'glm' in model_on_8080.lower() or 'ik_llama' in model_on_8080.lower()):
-            active_on_8080 = 'ik_llama_cpp'
-        elif model_on_8080 and ('glm' in model_on_8080.lower() or 'ik_llama' in model_on_8080.lower()):
-            active_on_8080 = 'ik_llama_cpp'
-        elif has_llama or model_on_8080:
-            active_on_8080 = 'llama_cpp'
+            # Fallback: utiliser la detection de processus
+            if not active_key:
+                for key in member_keys:
+                    svc = services[key]
+                    if isinstance(svc, dict):
+                        proc_patterns = svc.get("process_patterns", [])
+                        for proc in _psutil.process_iter(['cmdline']):
+                            cmd = ' '.join(proc.info.get('cmdline') or [])
+                            if any(p in cmd for p in proc_patterns):
+                                active_key = key
+                                break
+                    if active_key:
+                        break
+
+            # Fallback final: premier membre
+            if not active_key:
+                active_key = member_keys[0]
+
+            # Health check du service actif
+            active_conf = services.get(active_key, services.get(member_keys[0], {}))
+            health_ep = active_conf.get("health_endpoint", "/health")
+            timeout_s = active_conf.get("timeout_seconds", 2)
+
+            status = 'DOWN'
+            latency = None
+            slots_active = None
+            slots_total = None
+
+            if base_url:
+                try:
+                    url = join_url(base_url, health_ep)
+                    start = _time.time()
+                    resp = _requests.get(url, timeout=timeout_s)
+                    latency = _time.time() - start
+                    if resp.status_code < 400:
+                        status = 'UP'
+                    if resp.status_code == 200:
+                        try:
+                            data = resp.json()
+                            sp = data.get('slots_processing')
+                            si = data.get('slots_idle')
+                            if isinstance(sp, int) and isinstance(si, int):
+                                slots_active = sp
+                                slots_total = sp + si
+                        except Exception:
+                            pass
+                except Exception:
+                    pass
+
+            group_active[grp_name] = active_key
+            group_models[grp_name] = model_id
+            group_latencies[grp_name] = latency
+            group_slots[grp_name] = (slots_active, slots_total)
+
+            # Tous les membres du groupe: DOWN sauf celui actif
+            for key in member_keys:
+                svc_conf = services[key]
+                name = (svc_conf.get("name", key) if isinstance(svc_conf, dict) else key)
+                service_statuses[name] = status if key == active_key else 'DOWN'
         else:
-            active_on_8080 = 'llama_cpp'
-    else:
-        if has_vllm:
-            active_on_8080 = 'vllm'
-        elif has_ik_llama:
-            active_on_8080 = 'ik_llama_cpp'
-        elif has_llama:
-            active_on_8080 = 'llama_cpp'
+            # Port ferme — verifier si un processus tourne (LOADING)
+            for key in member_keys:
+                svc_conf = services[key]
+                name = (svc_conf.get("name", key) if isinstance(svc_conf, dict) else key)
+                proc_pats = svc_conf.get("process_patterns", []) if isinstance(svc_conf, dict) else []
+                proc_excl = svc_conf.get("process_exclude_patterns", []) if isinstance(svc_conf, dict) else []
+                has_proc = False
+                if proc_pats:
+                    for proc in _psutil.process_iter(['cmdline']):
+                        cmd = ' '.join(proc.info.get('cmdline') or [])
+                        if any(p in cmd for p in proc_pats):
+                            if proc_excl and any(e in cmd for e in proc_excl):
+                                continue
+                            has_proc = True
+                            break
+                service_statuses[name] = 'LOADING' if has_proc else 'DOWN'
 
-    if active_on_8080 == 'vllm':
-        ik_llama_status = 'DOWN'
-        llama_status = 'DOWN'
-        vllm_status = port_8080_status
-    elif active_on_8080 == 'ik_llama_cpp':
-        ik_llama_status = port_8080_status
-        llama_status = 'DOWN'
-        vllm_status = 'DOWN'
-    elif active_on_8080 == 'llama_cpp':
-        ik_llama_status = 'DOWN'
-        llama_status = port_8080_status
-        vllm_status = 'DOWN'
-    else:
-        ik_llama_status = 'LOADING' if has_ik_llama else 'DOWN'
-        llama_status = 'LOADING' if has_llama else 'DOWN'
-        vllm_status = 'LOADING' if has_vllm else 'DOWN'
+    # Services hors groupe (independants)
+    for svc_key, svc_conf in services.items():
+        if not isinstance(svc_conf, dict):
+            continue
+        grp = svc_conf.get("exclusive_group")
+        if grp:
+            continue  # deja traite dans les groupes
+        name = svc_conf.get("name", svc_key)
+        base_url = svc_conf.get("base_url", "")
+        health_ep = svc_conf.get("health_endpoint", "/health")
+        timeout_s = svc_conf.get("timeout_seconds", 2)
 
-    if active_on_8080 not in ('ik_llama_cpp', 'llama_cpp'):
-        port_8080_latency = None
-        slots_active = None
-        slots_total = None
+        if base_url:
+            try:
+                status, _ = check_service_health(base_url, health_ep, timeout_s)
+                service_statuses[name] = status
+            except Exception:
+                service_statuses[name] = 'DOWN'
+        else:
+            service_statuses[name] = 'DOWN'
 
-    ollama_status, _ = check_service_health(
-        config["services"]["ollama"]["base_url"],
-        config["services"]["ollama"]["health_endpoint"],
-        config["services"]["ollama"]["timeout_seconds"],
-    )
-
-    voxtral_status, _ = check_service_health(
-        config["services"]["voxtral"]["base_url"],
-        config["services"]["voxtral"]["health_endpoint"],
-        config["services"]["voxtral"]["timeout_seconds"],
-    )
-
-    voxtral_stt_status, _ = check_service_health(
-        config["services"]["voxtral_stt"]["base_url"],
-        config["services"]["voxtral_stt"]["health_endpoint"],
-        config["services"]["voxtral_stt"]["timeout_seconds"],
-    )
+    # Latence globale (pour compatibilite) — utilise le premier groupe actif
+    active_on_8080 = None
+    model_on_8080 = None
+    primary_group = next(iter(group_active), None)
+    if primary_group:
+        active_on_8080 = group_active[primary_group]
+        model_on_8080 = group_models.get(primary_group)
 
     return {
-        'services': {
-            config["services"]["ik_llama_cpp"]["name"]: ik_llama_status,
-            config["services"]["llama_cpp"]["name"]: llama_status,
-            config["services"]["vllm"]["name"]: vllm_status,
-            config["services"]["ollama"]["name"]: ollama_status,
-            config["services"]["voxtral"]["name"]: voxtral_status,
-            config["services"]["voxtral_stt"]["name"]: voxtral_stt_status,
-        },
-        'llama_latency_seconds': port_8080_latency,
-        'slots_active': slots_active,
-        'slots_total': slots_total,
+        'services': service_statuses,
+        'llama_latency_seconds': group_latencies.get(primary_group),
+        'slots_active': group_slots.get(primary_group, (None, None))[0],
+        'slots_total': group_slots.get(primary_group, (None, None))[1],
         'active_on_8080': active_on_8080,
         'model_on_8080': model_on_8080,
+        'active_services': group_active,
+        'models_by_group': group_models,
     }
 
 
-def check_service_is_running(svc_conf: dict, command_runner) -> bool:
-    cmd = svc_conf.get("service_check", ["systemctl", "is-active", "unknown.service"])
-    try:
-        if len(cmd) >= 3 and cmd[0] == "systemctl" and cmd[1] == "is-active":
-            result = command_runner.systemctl_is_active(cmd[2], timeout=3)
-            if result.stdout.strip() in ("active", "activating"):
-                return True
-    except Exception:
-        pass
-    url = svc_conf.get("base_url")
-    timeout = svc_conf.get("timeout_seconds", 2)
-    endpoint = svc_conf.get("health_endpoint", "/")
-    if url:
-        status, _ = check_service_health(url, endpoint, min(timeout, 2))
-        if status == "UP":
-            return True
-    port = svc_conf.get("port", 0)
-    if port and check_port_is_open("127.0.0.1", port, timeout=1):
-        return True
-    return False
-
-
 def get_admin_services_status(config: dict, command_runner) -> dict:
-    try:
-        s = get_services_status(config, command_runner)
-    except Exception as exc:
-        _logger.error("get_services_status() failed in admin: %s", exc)
-        s = {}
+    s = get_services_status(config, command_runner)
+    health_statuses = s.get("services", {})
     active_on_8080 = s.get("active_on_8080")
-    model_on_8080 = s.get("model_on_8080", "")
     status = {}
-    for key, conf in config.get("start_stop", {}).items():
-        is_llm = conf.get("is_llm", False)
-        port = conf.get("port", 0)
+
+    for key, conf in config.get("services", {}).items():
+        if not isinstance(conf, dict):
+            continue
+        role = conf.get("role", "auxiliary")
+        port = conf.get("port") or _extract_port(conf.get("base_url", ""))
+        grp = conf.get("exclusive_group")
+        name = conf.get("name", key)
+
         running = False
-        if is_llm and port == 8080:
-            if active_on_8080 == 'llama_cpp':
-                if key == 'glm47':
-                    if not model_on_8080 or model_on_8080.lower() == 'glm-4.7-iq5':
-                        running = True
-                elif key == 'qwen36_35b_q8':
-                    if model_on_8080 and 'qwen3-35b-arbitrage' in model_on_8080.lower() and 'q8' in model_on_8080.lower() and 'ud' not in model_on_8080.lower():
-                        running = True
-                elif key == 'qwen36_35b_udq8':
-                    if model_on_8080 and 'qwen3-35b-arbitrage' in model_on_8080.lower() and 'ud-q8' in model_on_8080.lower():
-                        running = True
-            elif active_on_8080 == 'vllm':
-                if key == 'qwen36_27b_vllm':
-                    running = True
+        if role == "llm" and grp:
+            running = (active_on_8080 == key)
         else:
-            running = check_service_is_running(conf, command_runner)
+            running = _systemd_is_active(conf, command_runner)
+
         status[key] = {
             "key": key,
-            "display_name": conf.get("display_name", key),
-            "is_llm": is_llm,
-            "port": port,
+            "display_name": name,
+            "role": role,
+            "backend": conf.get("backend", ""),
+            "port": port or 0,
             "running": running,
+            "health": health_statuses.get(name, "DOWN"),
             "unit": conf.get("systemd_unit", ""),
+            "exclusive_group": grp,
         }
     return status
 
 
+def _systemd_is_active(svc_conf: dict, command_runner) -> bool:
+    unit = svc_conf.get("systemd_unit", "")
+    if not unit:
+        return False
+    try:
+        result = command_runner.systemctl_is_active(unit, timeout=3)
+        return result.stdout.strip() in ("active", "activating")
+    except Exception:
+        return False
 
+
+def _extract_port(base_url):
+    if not base_url:
+        return None
+    try:
+        return int(base_url.rsplit(":", 1)[-1].rstrip("/"))
+    except (ValueError, IndexError):
+        return None

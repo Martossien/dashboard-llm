@@ -24,7 +24,12 @@
         }
 
         function updateDashboard(data) {
-            document.getElementById('model-name').textContent = data.active_on_8080 === 'vllm' ? (data.model_on_8080 || data.model_name) : (data.model_name || 'Unknown');
+            const llamaSvc = data.active_llama_service_name || data.llama_service_name;
+            const activeServices = data.active_services || {};
+            const anyGroupActive = Object.values(activeServices).some(k => k);
+            const activeInGroup = anyGroupActive && Object.values(activeServices)[0];
+
+            document.getElementById('model-name').textContent = data.model_name || 'Unknown';
             document.getElementById('cpu-load').textContent = data.cpu.load + '%';
 
             document.getElementById('ram-usage').textContent = `${data.ram.used.toFixed(1)} / ${data.ram.total.toFixed(1)} GB`;
@@ -34,7 +39,9 @@
             servicesStatus.innerHTML = '';
             const promptRate = data.prompt_tokens_per_second;
             const generationRate = data.generation_tokens_per_second;
+            let downCount = 0;
             for (const [service, status] of Object.entries(data.services)) {
+                if (status === 'DOWN') { downCount++; continue; }
                 const wrapper = document.createElement('div');
                 wrapper.style.marginBottom = '8px';
                 
@@ -50,7 +57,7 @@
                 wrapper.appendChild(badge);
                 
                 const llamaSvc = data.active_llama_service_name || data.llama_service_name;
-                const isLlamaActive = (data.active_on_8080 === 'ik_llama_cpp' || data.active_on_8080 === 'llama_cpp');
+                const isLlamaActive = anyGroupActive;
                 if (service === llamaSvc && isLlamaActive && status === 'UP') {
                     if (typeof data.slots_active === 'number' && typeof data.slots_total === 'number' && data.slots_total > 0) {
                         const slotsLine = document.createElement('div');
@@ -71,12 +78,13 @@
                     wrapper.appendChild(modelName);
                 }
 
-                if (service === data.vllm_service_name && data.active_on_8080 === 'vllm' && status === 'UP') {
+                const vllmActive = activeInGroup && service === data.vllm_service_name;
+                if (vllmActive && status === 'UP') {
                     const vllmModel = document.createElement('div');
                     vllmModel.style.fontSize = '11px';
                     vllmModel.style.color = '#8b949e';
                     vllmModel.style.marginTop = '4px';
-                    vllmModel.textContent = `Model: ${data.model_on_8080 || 'Unknown'}`;
+                    vllmModel.textContent = `Model: ${data.model_on_8080 || data.model_name || 'Unknown'}`;
                     wrapper.appendChild(vllmModel);
                 }
 
@@ -95,7 +103,8 @@
                     }
                 }
 
-                if (service === data.vllm_service_name && data.active_on_8080 === 'vllm' && (status === 'UP' || status === 'SLOW')) {
+                const vllmTimingActive = activeInGroup && service === data.vllm_service_name;
+                if (vllmTimingActive && (status === 'UP' || status === 'SLOW')) {
                     const hasPrompt = Number.isFinite(data.vllm_prompt_tokens_per_second);
                     const hasGeneration = Number.isFinite(data.vllm_generation_tokens_per_second);
                     if (hasPrompt || hasGeneration) {
@@ -132,6 +141,14 @@
                 }
 
                 servicesStatus.appendChild(wrapper);
+            }
+            if (downCount > 0) {
+                const downLine = document.createElement('div');
+                downLine.style.fontSize = '11px';
+                downLine.style.color = '#484f58';
+                downLine.style.marginTop = '6px';
+                downLine.textContent = downCount + ' service' + (downCount > 1 ? 's' : '') + ' DOWN';
+                servicesStatus.appendChild(downLine);
             }
 
             const gpuCards = document.getElementById('gpu-cards');
@@ -287,12 +304,12 @@
 
         // F12: Dynamic tab title
         function updateTabTitle(data) {
-            const downCount = Object.values(data.services || {}).filter(s => s === 'DOWN').length;
             const model = data.model_name && data.model_name !== 'Unknown' ? data.model_name : null;
-            if (downCount > 0) {
-                document.title = '\u26A0 ' + downCount + ' DOWN — Dashboard';
-            } else if (model) {
+            const downCount = Object.values(data.services || {}).filter(s => s === 'DOWN').length;
+            if (model) {
                 document.title = model + ' — Dashboard';
+            } else if (downCount > 0) {
+                document.title = '\u26A0 ' + downCount + ' DOWN — Dashboard';
             } else {
                 document.title = 'System & AI Dashboard';
             }
@@ -409,7 +426,8 @@
         }
 
         function safeServiceClass(service) {
-            const allowed = ['vllm', 'ollama', 'llama_cpp', 'ik_llama_cpp', 'python', 'unknown'];
+            const cfg = window.DASHBOARD_SERVICE_KEYS || [];
+            const allowed = cfg.concat(['python', 'unknown']);
             return allowed.includes(service) ? service : 'unknown';
         }
 

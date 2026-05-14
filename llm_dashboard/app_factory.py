@@ -13,14 +13,12 @@ from typing import Optional
 from llm_dashboard.config import load_config
 from llm_dashboard.runtime import create_runtime_dependencies, RuntimeDependencies
 from llm_dashboard.monitors.system import get_cpu_info, get_ram_info
-from llm_dashboard.monitors.startup import load_startup_stats
-from llm_dashboard.services.detection import (
-    find_ik_llama_process,
-    find_llama_process,
-)
+from llm_dashboard.monitors.startup import load_startup_stats, configure_startup_paths
 from llm_dashboard.web import (
     AdminAPIRoutes, AdminAuthRoutes, AdminPanelRoute,
-    DashboardAPIRoute, create_app as _create_flask_app, register_public_api,
+    ConfigPanelRoute, DashboardAPIRoute,
+    create_app as _create_flask_app, register_public_api,
+    create_config_api,
 )
 
 logger = logging.getLogger("dashboard-llm")
@@ -60,6 +58,12 @@ def register_routes(app, config: dict, deps: RuntimeDependencies) -> None:
     )
     admin_api.register(app)
 
+    # Configuration page
+    config_panel = ConfigPanelRoute(config, deps.admin_login_required)
+    config_panel.register(app)
+    config_api = create_config_api(config, deps.admin_login_required)
+    app.register_blueprint(config_api)
+
     dashboard_api = DashboardAPIRoute(
         config,
         get_cpu_info, get_ram_info,
@@ -68,7 +72,6 @@ def register_routes(app, config: dict, deps: RuntimeDependencies) -> None:
         deps.get_llama_timings, deps.get_vllm_timings,
         deps.get_logs, deps.get_client_ips,
         deps.detect_model_name,
-        find_ik_llama_process, find_llama_process,
         logger,
         get_ollama_models=deps.get_ollama_models,
         get_llama_metrics=deps.get_llama_metrics,
@@ -122,7 +125,7 @@ def create_full_app(
     """
     config = load_config(config_path)
     deps = create_runtime_dependencies(config)
-    load_startup_stats()
+    configure_startup_paths(config)
 
     app = _create_flask_app(config)
 

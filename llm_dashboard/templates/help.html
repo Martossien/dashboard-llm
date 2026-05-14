@@ -12,156 +12,117 @@
         <div class="nav-bar">
             <a href="/">Dashboard principal</a>
             <a href="/admin">Admin Panel</a>
+            <a href="/admin/config">Configuration</a>
         </div>
 
         <div class="section">
             <h2>Page principale — Dashboard de surveillance</h2>
             <p>
-                La page principale affiche en temps reel l'etat du serveur et des services LLM.
-                Elle se recharge automatiquement toutes les quelques secondes.
+                La page principale affiche en temps reel l'etat du serveur et des services.
+                Les services DOWN sont masques (un compteur discret en bas).
             </p>
             <h3>Informations affichees</h3>
             <ul>
-                <li><span class="highlight">Modele charge</span> : le nom du modele LLM actif sur le port 8080 (si detecte)</li>
-                <li><span class="highlight">CPU Load</span> : charge CPU du serveur en pourcentage</li>
-                <li><span class="highlight">RAM Usage</span> : memoire RAM utilisee / totale</li>
-                <li><span class="highlight">Services Status</span> : statut de chaque service (vert = actif, rouge = arrete, jaune = lent, gris = chargement)</li>
-                <li><span class="highlight">GPU Cards</span> : pour chaque GPU : temperature, VRAM utilisee, consommation electrique</li>
-                <li><span class="highlight">Logs</span> : derniers logs de chaque service, avec onglets par service</li>
-            </ul>
-            <h3>Couleurs des statuts</h3>
-            <table>
-                <tr><th>Statut</th><th>Couleur</th><th>Signification</th></tr>
-                <tr><td><span class="badge badge-green">UP</span></td><td>Vert</td><td>Service actif et repond correctement</td></tr>
-                <tr><td><span class="badge badge-red">DOWN</span></td><td>Rouge</td><td>Service arrete ou ne repond pas</td></tr>
-                <tr><td><span class="badge badge-yellow">SLOW</span></td><td>Jaune</td><td>Service actif mais temps de reponse eleve</td></tr>
-                <tr><td><span class="badge badge-gray">LOADING</span></td><td>Gris</td><td>Service en cours de chargement (vLLM : 60-120s)</td></tr>
-            </table>
-            <h3>Jauges GPU</h3>
-            <p>
-                Les barres de progression VRAM et puissance changent de couleur selon les seuils configures :
-            </p>
-            <ul>
-                <li><span class="success">Vert</span> : en dessous du seuil d'avertissement</li>
-                <li><span class="warn">Jaune</span> : entre seuil d'avertissement et seuil critique</li>
-                <li><span class="danger">Rouge</span> : au-dela du seuil critique</li>
+                <li><span class="highlight">Modele charge</span> : le nom du modele LLM actif (detecte via /v1/models)</li>
+                <li><span class="highlight">CPU Load / RAM</span> : utilisation systeme</li>
+                <li><span class="highlight">Services Status</span> : statut de chaque service (vert = UP, rouge = DOWN, jaune = SLOW, gris = LOADING)</li>
+                <li><span class="highlight">Token rates</span> : prompt et generation tokens par seconde (via /metrics)</li>
+                <li><span class="highlight">GPU Cards</span> : temperature, VRAM, consommation electrique, SM/mem clocks, throttling</li>
+                <li><span class="highlight">Logs</span> : derniers logs de chaque service, onglets separes</li>
             </ul>
         </div>
 
         <div class="section">
             <h2>Page Admin — Controle des services</h2>
             <p>
-                La page Admin permet de demarrer, arreter et redemarrer les services LLM et auxiliaires.
-                Elle est protegee par mot de passe. Pour y acceder, cliquez sur
-                <span class="highlight">Admin Panel</span> depuis la page principale.
+                Accessible via <code>/admin/panel</code>, protegee par mot de passe.
+                Permet de demarrer, arreter et forcer l'arret des services.
             </p>
-            <h3>Regle principale</h3>
-            <p class="warn">
-                Un seul service LLM peut tourner a la fois sur le port 8080.
-                Demarrer un LLM arrete automatiquement le LLM precedemment actif.
-            </p>
-            <h3>Services LLM (port 8080)</h3>
-            <table>
-                <tr><th>Service</th><th>Moteur</th><th>Description</th></tr>
-                <tr><td>GLM-4.7</td><td>ik_llama.cpp</td><td>Modele GLM-4.7 en IQ5_K (quantification 5-bit)</td></tr>
-                <tr><td>Qwen3.6-35B Q8_0</td><td>llama.cpp</td><td>Qwen3.6-35B-A3B en Q8_0 (8-bit)</td></tr>
-                <tr><td>Qwen3.6-35B UD-Q8_K_XL</td><td>llama.cpp</td><td>Qwen3.6-35B-A3B en UD-Q8_K_XL (8-bit optimise)</td></tr>
-                <tr><td>Qwen3.6-27B vLLM</td><td>vLLM</td><td>Qwen3.6-27B-FP8 sur 2x RTX 5090 (tensor parallel)</td></tr>
-            </table>
-            <h3>Services auxiliaires (independants)</h3>
-            <table>
-                <tr><th>Service</th><th>Port</th><th>Description</th></tr>
-                <tr><td>Ollama</td><td>11434</td><td>Serveur multi-modeles Ollama (independant du port 8080)</td></tr>
-                <tr><td>Voxtral TTS</td><td>6060</td><td>Synthese vocale (Text-to-Speech)</td></tr>
-                <tr><td>Voxtral STT</td><td>7860</td><td>Reconnaissance vocale (Speech-to-Text)</td></tr>
-            </table>
+            <h3>LLM Engine</h3>
             <p>
-                Les services auxiliaires et Ollama sont independants : ils ne partagent pas le port 8080
-                et peuvent tourner en meme temps qu'un LLM sur 8080.
+                Dropdown listant tous les services LLM avec un service systemd.
+                Selectionnez un modele puis cliquez <span class="success">Demarrer</span>.
+                Le service concurrent dans le meme groupe exclusif est arrete automatiquement.
             </p>
-            <h3>Boutons de controle</h3>
+            <h3>Projets et auxiliaires</h3>
+            <p>
+                Cartes individuelles pour les services hors LLM Engine (Ollama, proxies, STT...).
+                Chaque carte affiche le role (LLM, Projet, Auxiliaire) et le statut health (UP/DOWN).
+            </p>
+            <h3>Boutons</h3>
             <ul>
-                <li><span class="success">Demarrer</span> : lance le service (attend que le port soit ouvert)</li>
-                <li><span class="danger">Arreter</span> : arrete proprement le service (systemctl stop, puis fuser -k si necessaire)</li>
-                <li><span class="warn">Redemarrer</span> : arrete puis relance le meme service</li>
-                <li><span class="danger">Force Kill</span> : tue les processus GPU restants (SIGKILL) — a utiliser si Arreter ne suffit pas</li>
-                <li><span class="danger">Arreter tous les LLM</span> : arrete tous les LLM sur le port 8080</li>
+                <li><span class="success">Demarrer</span> : <code>sudo systemctl start &lt;unit&gt;</code></li>
+                <li><span class="danger">Arreter</span> : <code>sudo systemctl stop &lt;unit&gt;</code></li>
+                <li><span class="warn">Redemarrer</span> : stop puis start</li>
+                <li><span class="danger">Force Kill</span> : <code>fuser -k &lt;port&gt;/tcp</code> + kill GPU</li>
             </ul>
-            <h3>Temps de chargement</h3>
-            <p>
-                Les modeles LLM mettent du temps a se charger en memoire GPU :
-            </p>
-            <ul>
-                <li><code>ik_llama.cpp</code> / <code>llama.cpp</code> : 30 a 60 secondes</li>
-                <li><code>vLLM</code> : 60 a 120 secondes (le modele FP8 + compilation CUDA)</li>
-            </ul>
-            <p>
-                Pendant le chargement, le statut affiche <span class="badge badge-gray">LOADING</span>.
-                Il faut attendre que le port 8080 soit ouvert pour utiliser l'API.
-            </p>
-            <h3>VRAM</h3>
-            <p>
-                La section VRAM affiche l'occupation memoire des GPUs. Apres un arret,
-                la VRAM peut mettre quelques secondes a se liberer. Si des processus GPU
-                restent bloques, utilisez <span class="danger">Force Kill</span>.
-            </p>
         </div>
 
         <div class="section">
-            <h2>Scripts en ligne de commande</h2>
+            <h2>Page Configuration — /admin/config</h2>
             <p>
-                Des scripts shell sont disponibles dans <code>/root/stop_start_llm/</code>
-                pour piloter les services directement depuis le terminal :
+                Interface web pour gerer les services sans editer config.yaml a la main.
             </p>
-            <h3>Demarrage</h3>
-            <table>
-                <tr><th>Script</th><th>Service</th></tr>
-                <tr><td><code>start_glm47.sh</code></td><td>GLM-4.7 (ik_llama.cpp)</td></tr>
-                <tr><td><code>start_qwen36_35b_q8.sh</code></td><td>Qwen3.6-35B Q8_0 (llama.cpp)</td></tr>
-                <tr><td><code>start_qwen36_35b_udq8.sh</code></td><td>Qwen3.6-35B UD-Q8_K_XL (llama.cpp)</td></tr>
-                <tr><td><code>start_qwen36_27b_vllm.sh</code></td><td>Qwen3.6-27B vLLM</td></tr>
-                <tr><td><code>start_ollama.sh</code></td><td>Ollama (port 11434)</td></tr>
-                <tr><td><code>start_voxtral_tts.sh</code></td><td>Voxtral TTS (port 6060)</td></tr>
-                <tr><td><code>start_voxtral_stt.sh</code></td><td>Voxtral STT (port 7860)</td></tr>
-            </table>
-            <h3>Arret</h3>
-            <table>
-                <tr><th>Script</th><th>Service</th></tr>
-                <tr><td><code>stop_glm47.sh</code></td><td>GLM-4.7</td></tr>
-                <tr><td><code>stop_qwen36_35b_q8.sh</code></td><td>Qwen3.6-35B Q8_0</td></tr>
-                <tr><td><code>stop_qwen36_35b_udq8.sh</code></td><td>Qwen3.6-35B UD-Q8_K_XL</td></tr>
-                <tr><td><code>stop_qwen36_27b_vllm.sh</code></td><td>Qwen3.6-27B vLLM</td></tr>
-                <tr><td><code>stop_ollama.sh</code></td><td>Ollama</td></tr>
-                <tr><td><code>stop_voxtral_tts.sh</code></td><td>Voxtral TTS</td></tr>
-                <tr><td><code>stop_voxtral_stt.sh</code></td><td>Voxtral STT</td></tr>
-                <tr><td><code>stop_all_llm.sh</code></td><td>Tous les LLM (8080 + 11434)</td></tr>
-            </table>
+            <h3>Onglet Audit</h3>
+            <p>
+                Scanne la machine pour detecter :
+                backends installes (vLLM, llama.cpp, ik_llama.cpp, SGLang, Ollama, LM Studio),
+                modeles (~/models/ et ~/.cache/lm-studio/models/),
+                ports ouverts, services systemd, conda envs.
+                <strong>Cliquez</strong> sur un element pour pre-remplir le formulaire.
+            </p>
+            <h3>Onglet Ajouter</h3>
+            <p>
+                Formulaire complet pour definir un service :
+                cle, role (LLM Engine / Projet / Auxiliaire), backend, nom, port, URL,
+                systemd unit, modele, log, groupe exclusif.
+                La <strong>commande de lancement</strong> (ExecStart) est editable librement —
+                un template par defaut est fourni par backend, modifiez-le selon vos besoins.
+                Boutons : apercu YAML, generer .service, installer le service, sauvegarder.
+            </p>
+            <h3>Onglet Services</h3>
+            <p>
+                Tableau des services definis. Edition et suppression.
+                Lors de l'edition, le vrai ExecStart du fichier .service est charge (pas le template).
+            </p>
         </div>
 
         <div class="section">
             <h2>Changer le mot de passe admin</h2>
+            <ul>
+                <li>Executez <code>python change_admin_password.py</code> depuis le repertoire d'installation</li>
+                <li>Le script detecte automatiquement l'environnement conda</li>
+                <li>Vous pouvez aussi definir <code>admin.password_hash</code> dans <code>config.yaml</code></li>
+            </ul>
+        </div>
+
+        <div class="section">
+            <h2>Services systemd</h2>
             <p>
-                Pour modifier le mot de passe d'acces au panel Admin :
+                Chaque LLM Engine est gere par un service systemd.
+                Commandes utiles :
             </p>
             <ul>
-                <li>Executez <code>python3 /opt/dashboard-llm/change_admin_password.py</code></li>
-                <li>Suivez les instructions pour saisir le nouveau mot de passe</li>
-                <li>Le hash est mis a jour dans <code>/opt/dashboard-llm/config.yaml</code></li>
+                <li><code>sudo systemctl start vllm-qwen27b.service</code> — demarrer</li>
+                <li><code>sudo systemctl stop vllm-qwen27b.service</code> — arreter</li>
+                <li><code>journalctl -u vllm-qwen27b.service -f</code> — logs en direct</li>
             </ul>
         </div>
 
         <div class="section">
             <h2>API Endpoints</h2>
-            <p>URLs utiles pour verifier les services :</p>
             <ul>
-                <li><code>http://&lt;serveur&gt;:5000/</code> — Dashboard principal</li>
-                <li><code>http://&lt;serveur&gt;:5000/admin</code> — Page de connexion Admin</li>
-                <li><code>http://&lt;serveur&gt;:5000/help</code> — Cette page</li>
-                <li><code>http://&lt;serveur&gt;:5000/api/data</code> — Donnees JSON (statut systeme)</li>
-                <li><code>http://&lt;serveur&gt;:5000/api/admin/status</code> — Statut admin (auth requise)</li>
-                <li><code>http://&lt;serveur&gt;:5000/health</code> — Healthcheck</li>
-                <li><code>http://&lt;serveur&gt;:8080/v1/models</code> — Modeles LLM disponibles</li>
-                <li><code>http://&lt;serveur&gt;:8080/v1/chat/completions</code> — API chat LLM</li>
+                <li><code>http://&lt;serveur&gt;:{{ dashboard_port }}/</code> — Dashboard principal</li>
+                <li><code>http://&lt;serveur&gt;:{{ dashboard_port }}/admin</code> — Login Admin</li>
+                <li><code>http://&lt;serveur&gt;:{{ dashboard_port }}/admin/config</code> — Configuration</li>
+                <li><code>http://&lt;serveur&gt;:{{ dashboard_port }}/help</code> — Cette page</li>
+                <li><code>http://&lt;serveur&gt;:{{ dashboard_port }}/health</code> — Healthcheck</li>
+                <li><code>http://&lt;serveur&gt;:{{ dashboard_port }}/metrics</code> — Prometheus</li>
+                <li><code>http://&lt;serveur&gt;:{{ dashboard_port }}/api/data</code> — Donnees JSON dashboard</li>
+                <li><code>http://&lt;serveur&gt;:{{ dashboard_port }}/api/v1/services</code> — Services + health</li>
+                <li><code>http://&lt;serveur&gt;:{{ dashboard_port }}/api/v1/gpus</code> — GPUs</li>
+                <li><code>http://&lt;serveur&gt;:{{ dashboard_port }}/api/admin/status</code> — Admin (auth)</li>
+                <li><code>http://&lt;serveur&gt;:{{ dashboard_port }}/api/admin/config/audit</code> — Audit machine (auth)</li>
             </ul>
         </div>
     </div>

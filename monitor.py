@@ -48,8 +48,6 @@ app, CONFIG = create_full_app(setup_signals=True)
 from llm_dashboard.services.commands import CommandRunner
 from llm_dashboard.services.detection import (
     detect_model_name as _detect_model_name,
-    _get_active_llama_key as _get_active_llama_key_fn,
-    get_llama_status as _get_llama_status_fn,
     get_services_status as _get_services_status_fn,
     get_admin_services_status as _get_admin_services_status_fn,
 )

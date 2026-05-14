@@ -13,9 +13,18 @@ from llm_dashboard.services.detection import find_llama_process
 
 logger = logging.getLogger("dashboard-llm.startup")
 
-LOAD_STATS_PATH = "/opt/dashboard-llm/llama_load_stats.json"
+DEFAULT_LOAD_STATS_PATH = os.path.join(os.path.dirname(__file__), "..", "llama_load_stats.json")
+LOAD_STATS_PATH = DEFAULT_LOAD_STATS_PATH
 LOAD_STATS = {"durations_seconds": [], "avg_seconds": None}
 LLAMA_STARTUP = {"pid": None, "start_time": None, "ready_recorded": False}
+
+
+def configure_startup_paths(config: dict) -> None:
+    global LOAD_STATS_PATH
+    paths = config.get("paths", {})
+    custom = paths.get("load_stats", "")
+    LOAD_STATS_PATH = os.path.abspath(custom) if custom else os.path.abspath(DEFAULT_LOAD_STATS_PATH)
+    load_startup_stats()
 
 
 def load_startup_stats() -> None:

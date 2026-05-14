@@ -127,7 +127,7 @@ def stop_all_llm_as_dicts(controller: ServiceController) -> list[dict]:
     for svc in controller.registry.llm_services():
         if svc.key in processed_keys:
             continue
-        if svc.stop_command:
+        if svc.systemd_unit or svc.stop_command:
             result = controller.stop_service(svc.key)
             results.append(control_result_to_dict(result))
 

@@ -1,9 +1,10 @@
 # Web dashboard (Flask)
 flask>=3.0.0
+werkzeug>=3.0.0
 # System metrics (CPU/RAM/process)
 psutil>=5.9.0
 # NVIDIA GPU metrics via NVML
-pynvml>=11.5.0
+nvidia-ml-py>=12.0
 # HTTP health checks and model discovery
 requests>=2.31.0
 # YAML configuration parsing

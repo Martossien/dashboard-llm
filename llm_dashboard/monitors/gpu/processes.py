@@ -45,32 +45,38 @@ class GPUProcess:
         }
 
 
-def guess_gpu_process_service(process_name: Optional[str], command: Optional[str]) -> str:
+def guess_gpu_process_service(process_name: Optional[str], command: Optional[str],
+                              service_patterns: Optional[dict] = None) -> str:
     """Devine le service auquel appartient un processus GPU.
 
     Heuristiques basees sur le nom du processus et sa ligne de commande.
+    Peut recevoir un dict {service_key: [patterns]} depuis la config
+    pour etre entierement dynamique.
 
     Returns:
-        "ik_llama_cpp", "vllm", "ollama", "llama_cpp", "python", ou "unknown".
+        Cle de service devinee ou "unknown".
     """
     name_lower = (process_name or "").lower()
     cmd_lower = (command or "").lower()
     combined = f"{name_lower} {cmd_lower}"
 
-    # ik_llama avant llama et vllm (pour eviter faux match)
+    if service_patterns:
+        for svc_key, patterns in service_patterns.items():
+            if patterns:
+                if any(p in combined for p in patterns):
+                    return svc_key
+
+    # Default heuristics (universal)
     if "ik_llama" in combined:
         return "ik_llama_cpp"
-
-    # vllm avant llama_cpp (vllm.entrypoints, api_server)
-    if "vllm" in combined or "vllm.entrypoints" in cmd_lower or "api_server" in cmd_lower:
+    if "vllm" in combined or "VLLM::" in combined or "vllm.entrypoints" in cmd_lower:
         return "vllm"
-
     if "ollama" in combined:
         return "ollama"
-
+    if "sglang" in combined:
+        return "sglang"
     if "llama-server" in combined or "llama.cpp" in combined:
         return "llama_cpp"
-
     if "python" in name_lower:
         return "python"
 
