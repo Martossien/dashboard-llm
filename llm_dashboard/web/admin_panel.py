@@ -12,10 +12,10 @@ from flask import redirect, render_template, url_for, session
 class AdminPanelRoute:
     """Route du panneau d'administration (/admin/panel)."""
 
-    def __init__(self, config: dict, admin_login_required, get_admin_services_status,
+    def __init__(self, config: dict, is_admin_authenticated, get_admin_services_status,
                  get_vram_status, get_logs, logger=None):
         self._config = config
-        self._login_required = admin_login_required
+        self._login_required = is_admin_authenticated
         self._get_services = get_admin_services_status
         self._get_vram = get_vram_status
         self._get_logs = get_logs

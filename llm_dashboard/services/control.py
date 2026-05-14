@@ -195,8 +195,11 @@ class ServiceController:
         """Arrete tous les services d'un groupe exclusif."""
         results = []
         for svc in self.registry.by_group(group):
-            if svc.stop_command:
-                result = self.runner.systemctl_stop(svc.systemd_unit or "", timeout=60)
+            if svc.systemd_unit or svc.stop_command:
+                if svc.systemd_unit:
+                    result = self.runner.systemctl_stop(svc.systemd_unit, timeout=60)
+                else:
+                    result = self.runner.run_command(svc.stop_command, timeout=60)
                 if result.success:
                     results.append(ControlResult(svc.key, True, "stopped"))
                 else:

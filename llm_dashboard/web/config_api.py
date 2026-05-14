@@ -461,31 +461,31 @@ def install_systemd_unit(svc_key, svc_data):
 # Flask blueprint
 # ===================================================================
 
-def create_config_api(config, admin_login_required) -> Blueprint:
+def create_config_api(config, is_admin_authenticated) -> Blueprint:
     bp = Blueprint("config_api", __name__)
 
     @bp.route("/api/admin/config/audit")
     def api_audit():
-        if not admin_login_required():
+        if not is_admin_authenticated():
             return jsonify({"error": "Unauthorized"}), 401
         return jsonify(audit_machine())
 
     @bp.route("/api/admin/config/services")
     def api_services():
-        if not admin_login_required():
+        if not is_admin_authenticated():
             return jsonify({"error": "Unauthorized"}), 401
         return jsonify(get_services())
 
     @bp.route("/api/admin/config/backend-defaults")
     def api_backend_defaults():
-        if not admin_login_required():
+        if not is_admin_authenticated():
             return jsonify({"error": "Unauthorized"}), 401
         backend = request.args.get("backend", "auto")
         return jsonify(BACKEND_DEFAULTS.get(backend, BACKEND_DEFAULTS["proxy"]))
 
     @bp.route("/api/admin/config/service", methods=["POST"])
     def api_add_service():
-        if not admin_login_required():
+        if not is_admin_authenticated():
             return jsonify({"error": "Unauthorized"}), 401
         data = request.get_json(force=True)
         svc_key = data.get("key", "").strip()
@@ -498,7 +498,7 @@ def create_config_api(config, admin_login_required) -> Blueprint:
 
     @bp.route("/api/admin/config/service/<svc_key>", methods=["DELETE"])
     def api_delete_service(svc_key):
-        if not admin_login_required():
+        if not is_admin_authenticated():
             return jsonify({"error": "Unauthorized"}), 401
         ok = delete_service(svc_key)
         if ok:
@@ -507,7 +507,7 @@ def create_config_api(config, admin_login_required) -> Blueprint:
 
     @bp.route("/api/admin/config/systemd/generate", methods=["POST"])
     def api_generate_systemd():
-        if not admin_login_required():
+        if not is_admin_authenticated():
             return jsonify({"error": "Unauthorized"}), 401
         data = request.get_json(force=True)
         svc_key = data.get("key", "untitled")
@@ -516,7 +516,7 @@ def create_config_api(config, admin_login_required) -> Blueprint:
 
     @bp.route("/api/admin/config/systemd/install", methods=["POST"])
     def api_install_systemd():
-        if not admin_login_required():
+        if not is_admin_authenticated():
             return jsonify({"error": "Unauthorized"}), 401
         data = request.get_json(force=True)
         svc_key = data.get("key", "untitled")
@@ -524,14 +524,14 @@ def create_config_api(config, admin_login_required) -> Blueprint:
 
     @bp.route("/api/admin/config/restart", methods=["POST"])
     def api_restart():
-        if not admin_login_required():
+        if not is_admin_authenticated():
             return jsonify({"error": "Unauthorized"}), 401
         ok = _restart_dashboard()
         return jsonify({"success": ok})
 
     @bp.route("/api/admin/config/systemd/read")
     def api_read_systemd():
-        if not admin_login_required():
+        if not is_admin_authenticated():
             return jsonify({"error": "Unauthorized"}), 401
         unit = request.args.get("unit", "")
         if not unit:

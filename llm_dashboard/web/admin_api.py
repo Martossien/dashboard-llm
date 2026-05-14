@@ -13,14 +13,14 @@ from flask import jsonify, request
 class AdminAPIRoutes:
     """Routes API d'administration (/api/admin/*)."""
 
-    def __init__(self, config, admin_login_required,
+    def __init__(self, config, is_admin_authenticated,
                  get_admin_services_status, get_vram_status, get_logs,
                  do_start_service, do_stop_service, stop_all_llm_engines,
                  _init_controller,
                  _control_result_to_dict, logger=None, audit_logger=None,
                  get_gpu_processes=None):
         self._config = config
-        self._login_required = admin_login_required
+        self._login_required = is_admin_authenticated
         self._get_services = get_admin_services_status
         self._get_vram = get_vram_status
         self._get_logs = get_logs

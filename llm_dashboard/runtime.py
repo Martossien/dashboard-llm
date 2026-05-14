@@ -98,7 +98,7 @@ class RuntimeDependencies:
     stop_all_llm_engines: Callable[[], list]
 
     # Auth helpers
-    admin_login_required: Callable[[], bool]
+    is_admin_authenticated: Callable[[], bool]
     check_admin_password: Callable[[str], bool]
 
     # Factory for controller
@@ -191,7 +191,7 @@ def create_runtime_dependencies(config: dict) -> RuntimeDependencies:
         return control_result_to_dict(result)
 
     # Auth helpers
-    def admin_login_required():
+    def is_admin_authenticated():
         if not config.get("admin", {}).get("enabled", True):
             return True
         from flask import session
@@ -230,7 +230,7 @@ def create_runtime_dependencies(config: dict) -> RuntimeDependencies:
         do_start_service=do_start,
         do_stop_service=do_stop,
         stop_all_llm_engines=stop_all_llm,
-        admin_login_required=admin_login_required,
+        is_admin_authenticated=is_admin_authenticated,
         check_admin_password=check_admin_password,
         create_controller=_create_controller,
         control_result_to_dict=control_result_to_dict,

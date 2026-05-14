@@ -232,7 +232,7 @@ def _register_admin_api(app, *, logged_in=True):
 
     AdminAPIRoutes(
         _minimal_config(),
-        admin_login_required=lambda: logged_in,
+        is_admin_authenticated=lambda: logged_in,
         get_admin_services_status=lambda: {"svc_a": {"running": True}},
         get_vram_status=lambda: {"enabled": False},
         get_logs=lambda: {"svc_a": ["log"]},
@@ -306,7 +306,7 @@ def test_admin_auth_routes_register_expected_endpoints():
 
     routes = AdminAuthRoutes(
         {"admin": {"enabled": True}},
-        admin_login_required=lambda: False,
+        is_admin_authenticated=lambda: False,
         check_admin_password=lambda password: password == "secret",
     )
     routes.register(app)
@@ -333,7 +333,7 @@ def test_admin_auth_login_success_and_logout():
 
     AdminAuthRoutes(
         {"admin": {"enabled": True}},
-        admin_login_required=lambda: False,
+        is_admin_authenticated=lambda: False,
         check_admin_password=lambda password: password == "secret",
     ).register(app)
 
@@ -365,7 +365,7 @@ def test_admin_auth_login_failure_renders_login():
 
     AdminAuthRoutes(
         {"admin": {"enabled": True}},
-        admin_login_required=lambda: False,
+        is_admin_authenticated=lambda: False,
         check_admin_password=lambda password: False,
     ).register(app)
 
@@ -380,7 +380,7 @@ def test_admin_panel_route_registers_expected_endpoint():
     app = Flask(__name__)
     AdminPanelRoute(
         _minimal_config(),
-        admin_login_required=lambda: True,
+        is_admin_authenticated=lambda: True,
         get_admin_services_status=lambda: {},
         get_vram_status=lambda: {"enabled": False},
         get_logs=lambda: {},
@@ -402,7 +402,7 @@ def test_admin_panel_redirects_when_unauthorized():
 
     AdminPanelRoute(
         _minimal_config(),
-        admin_login_required=lambda: False,
+        is_admin_authenticated=lambda: False,
         get_admin_services_status=lambda: {},
         get_vram_status=lambda: {"enabled": False},
         get_logs=lambda: {},
@@ -421,7 +421,7 @@ def test_admin_panel_renders_when_authorized():
 
     AdminPanelRoute(
         _minimal_config(),
-        admin_login_required=lambda: True,
+        is_admin_authenticated=lambda: True,
         get_admin_services_status=lambda: {
             "svc_a": {
                 "display_name": "Service A",

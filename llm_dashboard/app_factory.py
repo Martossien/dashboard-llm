@@ -35,19 +35,19 @@ def register_routes(app, config: dict, deps: RuntimeDependencies) -> None:
     audit_logger = logging.getLogger("dashboard-llm.audit")
 
     admin_auth = AdminAuthRoutes(
-        config, deps.admin_login_required, deps.check_admin_password, logger
+        config, deps.is_admin_authenticated, deps.check_admin_password, logger
     )
     admin_auth.register(app)
 
     admin_panel = AdminPanelRoute(
-        config, deps.admin_login_required,
+        config, deps.is_admin_authenticated,
         deps.get_admin_services_status, deps.get_vram_status,
         deps.get_logs, logger,
     )
     admin_panel.register(app)
 
     admin_api = AdminAPIRoutes(
-        config, deps.admin_login_required,
+        config, deps.is_admin_authenticated,
         deps.get_admin_services_status, deps.get_vram_status,
         deps.get_logs,
         deps.do_start_service, deps.do_stop_service,
@@ -59,9 +59,9 @@ def register_routes(app, config: dict, deps: RuntimeDependencies) -> None:
     admin_api.register(app)
 
     # Configuration page
-    config_panel = ConfigPanelRoute(config, deps.admin_login_required)
+    config_panel = ConfigPanelRoute(config, deps.is_admin_authenticated)
     config_panel.register(app)
-    config_api = create_config_api(config, deps.admin_login_required)
+    config_api = create_config_api(config, deps.is_admin_authenticated)
     app.register_blueprint(config_api)
 
     dashboard_api = DashboardAPIRoute(

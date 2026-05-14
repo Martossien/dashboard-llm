@@ -1,7 +1,7 @@
 """
 Admin auth routes — /admin, /admin/login, /admin/logout.
 
-Pas d'import depuis monitor.py. Les helpers admin_login_required()
+Pas d'import depuis monitor.py. Les helpers is_admin_authenticated()
 et check_admin_password() sont injectes via le constructeur.
 """
 
@@ -22,17 +22,17 @@ logger = logging.getLogger("dashboard-llm")
 class AdminAuthRoutes:
     """Routes d'authentification admin (login/logout)."""
 
-    def __init__(self, config: dict, admin_login_required, check_admin_password, logger_=None):
+    def __init__(self, config: dict, is_admin_authenticated, check_admin_password, logger_=None):
         """Initialise avec les dependances de monitor.py.
 
         Args:
             config: dictionnaire CONFIG complet.
-            admin_login_required: fonction () -> bool.
+            is_admin_authenticated: fonction () -> bool.
             check_admin_password: fonction (password: str) -> bool.
             logger_: logger optionnel injecte par l'application.
         """
         self._config = config
-        self._login_required = admin_login_required
+        self._login_required = is_admin_authenticated
         self._check_password = check_admin_password
         self._logger = logger_ or logger
 

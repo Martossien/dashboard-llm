@@ -6,9 +6,9 @@ from flask import redirect, render_template, url_for, session
 
 
 class ConfigPanelRoute:
-    def __init__(self, config, admin_login_required, logger=None):
+    def __init__(self, config, is_admin_authenticated, logger=None):
         self._config = config
-        self._login = admin_login_required
+        self._login = is_admin_authenticated
 
     def register(self, app):
         config = self._config

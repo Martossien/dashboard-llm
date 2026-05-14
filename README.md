@@ -2,60 +2,75 @@
 
 Lightweight monitoring and administration dashboard for local LLM servers.
 
-Supports **llama.cpp**, **ik_llama.cpp**, **vLLM**, **Ollama**, and any
-OpenAI-compatible API. Monitor GPU usage, token rates, service health, and
-manage service lifecycle (start/stop/restart) from a web interface.
+## Architecture
 
-## Screenshots
+```
+┌──────────────────────────────────────────────────┐
+│ dashboard-llm  (Flask, port 5001)                │
+├────────────────┬────────────────┬────────────────┤
+│ Dashboard      │ Admin Panel    │ Configuration  │
+│ GPU,services,  │ Start/Stop,    │ Audit, Add,    │
+│ logs,token     │ Force Kill     │ Edit, Delete   │
+│ rates          │                │ services       │
+├────────────────┴────────────────┴────────────────┤
+│ Config YAML ← editable via web UI, no CLI needed  │
+│ Systemd services ← generated per backend          │
+└──────────────────────────────────────────────────┘
+```
 
-(Coming soon)
-
-## Features
-
-- Real-time GPU monitoring (NVIDIA via pynvml, multi-GPU)
-- Per-service terminal logs with noise filtering
-- Token rate tracking (prompt + generation tok/s)
-- Prometheus /metrics endpoint (CPU, RAM, GPU, services, GPU processes)
-- REST API (/api/v1/gpus, /api/v1/services, /api/v1/metrics, /api/v1/gpus/processes)
-- Service lifecycle management (start/stop/restart/force-kill)
-- Admin panel with CSRF protection
-- GPU Process Viewer (process name, VRAM, command, user, service guess)
-- Multi-backend support (llama.cpp, ik_llama.cpp, vLLM, Ollama)
-- Exclusive group management (one LLM per port)
-- Temperature and power monitoring
-- Prometheus `/metrics` endpoint
+**Backends**: vLLM, llama.cpp, ik_llama.cpp, SGLang, Ollama, LM Studio  
+**Platforms**: Linux (NVIDIA GPU), 1-8 GPUs, systemd
 
 ## Quick Start
 
 ```bash
-pip install llm-dashboard
-cp config.example.yaml config.yaml
-# Edit config.yaml with your services
-python -m llm_dashboard
-# Open http://localhost:5000
+git clone https://github.com/Martossien/dashboard-llm.git
+cd dashboard-llm
+conda create -n dashboard-llm python=3.12 -y
+conda activate dashboard-llm
+pip install -e ".[nvidia]"
+
+# Deploy as systemd service
+sudo cp scripts/dashboard-llm.service /etc/systemd/system/
+sudo systemctl enable --now dashboard-llm
 ```
 
-## Docker
+Open `http://localhost:5001` — GPU, services, and logs in one page.
 
-```bash
-docker compose up -d
-```
+## Features
+
+- **Real-time GPU monitoring** — 8 GPUs, VRAM, temp, power, SM/mem clocks, throttling
+- **Per-service logs** — separate tabs per backend, live tail, noise filtering
+- **Token rate tracking** — prompt + generation tok/s via Prometheus `/metrics`
+- **Service lifecycle** — start/stop/force-kill via systemd, admin panel
+- **Multi-backend** — vLLM, llama.cpp, ik_llama.cpp, SGLang, Ollama, LM Studio
+- **Exclusive groups** — shared-port LLMs with mutual exclusion
+- **Configuration page** — `/admin/config` with machine audit, service wizard, systemd generator
+- **Prometheus `/metrics` endpoint** — CPU, RAM, GPU, services
 
 ## Configuration
 
-See `config.example.yaml` for all options.
+Use the web UI at `/admin/config` or edit `config.example.yaml`.  
+See `scripts/GUIDE.md` for detailed documentation.
+
+```yaml
+services:
+  vllm_qwen27b:
+    name: "Qwen3.6-27B (vLLM BF16)"
+    backend: "vllm"
+    role: "llm"
+    base_url: "http://127.0.0.1:8002"
+    systemd_unit: "vllm-qwen27b.service"
+    process_patterns: ["vllm serve"]
+    model_detect_pattern: "(?i)qwen36-27b"
+```
+
+## Admin Panel
+
+- `/admin/panel` — start/stop/force-kill services
+- `/admin/config` — audit machine, add/edit/delete services, generate systemd units
+- Password: `python change_admin_password.py`
 
 ## License
 
 MIT
-
-## Credits
-
-Inspired by:
-- [nvitop](https://github.com/XuehaiPan/nvitop) — NVIDIA GPU process viewer
-- [gpustat](https://github.com/wookayin/gpustat) — GPU monitoring CLI
-- [DCGM Exporter](https://github.com/NVIDIA/dcgm-exporter) — Prometheus GPU metrics
-- [oobabooga textgen](https://github.com/oobabooga/textgen) — Local LLM interface
-- [CoolerControl](https://github.com/codifryed/CoolerControl) — Thermal/fan control
-- [XPU Manager](https://github.com/intel/xpumanager) — Intel GPU management
-- [pyrsmi](https://github.com/ROCm/pyrsmi) — AMD ROCm monitoring

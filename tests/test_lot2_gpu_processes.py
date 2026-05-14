@@ -164,7 +164,7 @@ class TestGPUProcessAdmin:
 
         AdminAPIRoutes(
             config={"admin": {"enabled": True}, "services": {}, "start_stop": {}},
-            admin_login_required=lambda: True,
+            is_admin_authenticated=lambda: True,
             get_admin_services_status=lambda: {},
             get_vram_status=lambda: {"enabled": False},
             get_logs=lambda: {},
@@ -192,7 +192,7 @@ class TestGPUProcessAdmin:
 
         AdminAPIRoutes(
             config={"admin": {"enabled": True}, "services": {}, "start_stop": {}},
-            admin_login_required=lambda: False,
+            is_admin_authenticated=lambda: False,
             get_admin_services_status=lambda: {},
             get_vram_status=lambda: {"enabled": False},
             get_logs=lambda: {},

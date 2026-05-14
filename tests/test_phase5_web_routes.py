@@ -83,13 +83,13 @@ def _register_admin_routes(app, config, logged_in=True):
 
     AdminAuthRoutes(
         config,
-        admin_login_required=lambda: logged_in,
+        is_admin_authenticated=lambda: logged_in,
         check_admin_password=lambda p: p == "secret",
     ).register(app)
 
     AdminPanelRoute(
         config,
-        admin_login_required=lambda: logged_in,
+        is_admin_authenticated=lambda: logged_in,
         get_admin_services_status=lambda: {
             "test_service": {"key": "test_service", "display_name": "Test",
                             "running": True, "is_llm": False, "port": 1234}
@@ -100,7 +100,7 @@ def _register_admin_routes(app, config, logged_in=True):
 
     AdminAPIRoutes(
         config,
-        admin_login_required=lambda: logged_in,
+        is_admin_authenticated=lambda: logged_in,
         get_admin_services_status=lambda: {
             "test_service": {"key": "test_service", "display_name": "Test",
                             "running": True, "is_llm": False, "port": 1234}
