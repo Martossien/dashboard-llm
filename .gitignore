@@ -23,4 +23,5 @@ kill_local.sh
 Thumbs.db
 *.swp
 *.swo
-*~
+*~docs/ROADMAP.md
+docs/ROADMAP.md
