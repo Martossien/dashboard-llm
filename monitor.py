@@ -18,12 +18,6 @@ from llm_dashboard.config import (
 )
 from llm_dashboard.services.detection import join_url
 from llm_dashboard.monitors.logs import tail_log_lines, read_journalctl_logs
-from llm_dashboard.monitors.timings import (
-    extract_llama_timings as _extract_llama_timings,
-    extract_vllm_timings as _extract_vllm_timings,
-    LLAMA_TIMINGS as _LLAMA_TIMINGS,
-    VLLM_TIMINGS as _VLLM_TIMINGS,
-)
 
 # ---- Re-exports de detection (non-partial) ----
 from llm_dashboard.services.detection import (

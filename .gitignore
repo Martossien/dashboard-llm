@@ -25,3 +25,6 @@ Thumbs.db
 *.swo
 *~docs/ROADMAP.md
 docs/ROADMAP.md
+
+# Rapports d'audit locaux (copies depuis ~/docs)
+docs/audit_correction_*.md

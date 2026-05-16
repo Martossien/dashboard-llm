@@ -29,6 +29,13 @@
             const anyGroupActive = Object.values(activeServices).some(k => k);
             const activeInGroup = anyGroupActive && Object.values(activeServices)[0];
 
+            const serviceNames = data.service_names || {};
+            const svcKeyByDisplay = {};
+            for (const [k, v] of Object.entries(serviceNames)) {
+                svcKeyByDisplay[v] = k;
+            }
+            const tokenRates = data.service_token_rates || {};
+
             document.getElementById('model-name').textContent = data.model_name || 'Unknown';
             document.getElementById('cpu-load').textContent = data.cpu.load + '%';
 
@@ -37,8 +44,6 @@
 
             const servicesStatus = document.getElementById('services-status');
             servicesStatus.innerHTML = '';
-            const promptRate = data.prompt_tokens_per_second;
-            const generationRate = data.generation_tokens_per_second;
             let downCount = 0;
             for (const [service, status] of Object.entries(data.services)) {
                 if (status === 'DOWN') { downCount++; continue; }
@@ -56,9 +61,9 @@
                 badge.textContent = `${service}: ${statusText}`;
                 wrapper.appendChild(badge);
                 
-                const llamaSvc = data.active_llama_service_name || data.llama_service_name;
+                const currentLlamaSvc = data.active_llama_service_name || data.llama_service_name;
                 const isLlamaActive = anyGroupActive;
-                if (service === llamaSvc && isLlamaActive && status === 'UP') {
+                if (service === currentLlamaSvc && isLlamaActive && status === 'UP') {
                     if (typeof data.slots_active === 'number' && typeof data.slots_total === 'number' && data.slots_total > 0) {
                         const slotsLine = document.createElement('div');
                         slotsLine.style.fontSize = '11px';
@@ -69,9 +74,9 @@
                     }
                 }
 
-                if (service === llamaSvc && isLlamaActive && (status === 'UP' || status === 'LOADING') && data.model_name && data.model_name !== 'Unknown') {
+                if (service === currentLlamaSvc && isLlamaActive && (status === 'UP' || status === 'LOADING') && data.model_name && data.model_name !== 'Unknown') {
                     const modelName = document.createElement('div');
-                    modelName.style.fontSize = '11px';
+                   modelName.style.fontSize = '11px';
                     modelName.style.color = '#8b949e';
                     modelName.style.marginTop = '4px';
                     modelName.textContent = `Model: ${data.model_name}`;
@@ -88,33 +93,19 @@
                     wrapper.appendChild(vllmModel);
                 }
 
-                if (service === llamaSvc && isLlamaActive && (status === 'UP' || status === 'SLOW' || status === 'UNRESPONSIVE')) {
-                    const hasPrompt = Number.isFinite(data.prompt_tokens_per_second);
-                    const hasGeneration = Number.isFinite(data.generation_tokens_per_second);
-                    if (hasPrompt || hasGeneration) {
+                const svcKey = svcKeyByDisplay[service];
+                if (svcKey && tokenRates[svcKey] && (status === 'UP' || status === 'SLOW' || status === 'LOADING')) {
+                    const rates = tokenRates[svcKey];
+                    const hasPrompt = rates.prompt != null && Number.isFinite(rates.prompt);
+                    const hasGen = rates.generation != null && Number.isFinite(rates.generation);
+                    if (hasPrompt || hasGen) {
                         const speedLine = document.createElement('div');
                         speedLine.style.fontSize = '11px';
                         speedLine.style.color = '#8b949e';
                         speedLine.style.marginTop = '4px';
-                        const promptText = hasPrompt ? `${data.prompt_tokens_per_second.toFixed(2)} tok/s` : 'n/a';
-                        const generationText = hasGeneration ? `${data.generation_tokens_per_second.toFixed(2)} tok/s` : 'n/a';
-                        speedLine.textContent = `Prompt: ${promptText} | Gen: ${generationText}`;
-                        wrapper.appendChild(speedLine);
-                    }
-                }
-
-                const vllmTimingActive = activeInGroup && service === data.vllm_service_name;
-                if (vllmTimingActive && (status === 'UP' || status === 'SLOW')) {
-                    const hasPrompt = Number.isFinite(data.vllm_prompt_tokens_per_second);
-                    const hasGeneration = Number.isFinite(data.vllm_generation_tokens_per_second);
-                    if (hasPrompt || hasGeneration) {
-                        const speedLine = document.createElement('div');
-                        speedLine.style.fontSize = '11px';
-                        speedLine.style.color = '#8b949e';
-                        speedLine.style.marginTop = '4px';
-                        const promptText = hasPrompt ? `${data.vllm_prompt_tokens_per_second.toFixed(2)} tok/s` : 'n/a';
-                        const generationText = hasGeneration ? `${data.vllm_generation_tokens_per_second.toFixed(2)} tok/s` : 'n/a';
-                        speedLine.textContent = `Prompt: ${promptText} | Gen: ${generationText}`;
+                        const promptText = hasPrompt ? `${rates.prompt.toFixed(2)} tok/s` : 'n/a';
+                        const genText = hasGen ? `${rates.generation.toFixed(2)} tok/s` : 'n/a';
+                        speedLine.textContent = `Prompt: ${promptText} | Gen: ${genText}`;
                         wrapper.appendChild(speedLine);
                     }
                 }

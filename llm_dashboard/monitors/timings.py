@@ -25,23 +25,71 @@ def _extract_rates_from_metrics(metrics: dict) -> tuple[float | None, float | No
     """Extrait prompt/generation token rates d'un dict de metriques Prometheus.
 
     Les cles varient selon le backend :
-    - vLLM: vllm:prompt_throughput_toks_per_s / vllm:generation_throughput_toks_per_s
+    - vLLM: utilise _estimate_vllm_rates() qui calcule les tok/s depuis les
+      metriques de latence et les compteurs de tokens.
     - llama.cpp: n_tokens_second (global), llama_tokens_second
     - sglang: sglang:prompt_throughput / sglang:generation_throughput
+
+    Les metriques _created (timestamps Prometheus) et _total (compteurs absolus)
+    sont exclues de la capture directe car ce ne sont pas des taux.
     """
+    is_vllm = any(k.startswith("vllm:") for k in metrics)
+
+    if is_vllm:
+        prompt, gen = _estimate_vllm_rates(metrics)
+        if prompt is not None or gen is not None:
+            return prompt, gen
+
     prompt = None
     gen = None
     for key, val in metrics.items():
         k = key.lower()
-        if isinstance(val, (int, float)) and val > 0:
-            if "prompt" in k and ("throughput" in k or "tok" in k or "token" in k):
+        if not isinstance(val, (int, float)) or val <= 0:
+            continue
+        if k.endswith("_created") or k.endswith("_total"):
+            continue
+        if "prompt" in k and ("throughput" in k or "tok" in k or "token" in k):
+            if prompt is None:
                 prompt = float(val)
-            elif "generation" in k and ("throughput" in k or "tok" in k or "token" in k):
+        elif "generation" in k and ("throughput" in k or "tok" in k or "token" in k):
+            if gen is None:
                 gen = float(val)
-            elif "n_tokens_second" in k:
-                if "prompt" not in k and "gen" not in k:
+        elif "n_tokens_second" in k:
+            if "prompt" not in k and "gen" not in k:
+                if gen is None:
                     gen = float(val)
+
     return prompt, gen
+
+
+def _estimate_vllm_rates(metrics: dict) -> tuple[float | None, float | None]:
+    """Estime les token/s vLLM depuis les metriques de request si les throughput ne sont pas disponibles.
+
+    Utilise vllm:e2e_request_latency_seconds_sum/count pour le temps total,
+    et vllm:prompt_tokens_total / vllm:generation_tokens_total pour les tokens.
+    """
+    prompt_total = metrics.get("vllm:prompt_tokens_total")
+    gen_total = metrics.get("vllm:generation_tokens_total") or metrics.get("vllm:request_generation_tokens_sum")
+    e2e_sum = metrics.get("vllm:e2e_request_latency_seconds_sum")
+    e2e_count = metrics.get("vllm:e2e_request_latency_seconds_count")
+    ttft_sum = metrics.get("vllm:time_to_first_token_seconds_sum")
+
+    gen_count = metrics.get("vllm:generation_tokens_total") or metrics.get("vllm:request_generation_tokens_sum")
+
+    prompt_rate = None
+    gen_rate = None
+
+    if e2e_sum and e2e_count and e2e_count > 0:
+        total_elapsed = e2e_sum
+        decode_time = total_elapsed
+        if ttft_sum and ttft_sum > 0 and ttft_sum < total_elapsed:
+            decode_time = total_elapsed - ttft_sum
+        if gen_total and decode_time > 0:
+            gen_rate = gen_total / decode_time
+        if prompt_total and ttft_sum and ttft_sum > 0:
+            prompt_rate = prompt_total / ttft_sum
+
+    return prompt_rate, gen_rate
 
 
 def _extract_rates_from_logs(log_file: str, backend: str,
@@ -77,7 +125,7 @@ def _extract_llama_from_loglines(lines) -> tuple[float | None, float | None]:
                 break
     for line in reversed(lines):
         line_lower = line.lower()
-        m = re.search(r"(\d+(?:\.\d+)?)\s+(?:tok(?:ens?)?\s+per\s+sec|t/s|tokens/s|tok/s)\s*$", line_lower)
+        m = re.search(r"(\d+(?:\.\d+)?)\s+(?:tok(?:ens?)?\s+per\s+sec(?:ond)?|t/s|tokens/s|tok/s)", line_lower)
         if m:
             val = float(m.group(1))
             if "prompt" in line_lower or "sampling" in line_lower:

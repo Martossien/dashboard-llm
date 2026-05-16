@@ -68,16 +68,21 @@ class ServiceController:
         if not svc.systemd_unit and not svc.start_command:
             return ControlResult(key, False, f"Pas de systemd_unit ni start_command pour: {key}")
 
-        # Verifier VRAM
+        # Verifier VRAM (somme totale libre sur tous les GPUs)
         if svc.vram_min_mib > 0 and self._vram_checker:
             vram = self._vram_checker()
             if vram.get("enabled") and not vram.get("error"):
-                for gpu in vram.get("gpus", []):
-                    if gpu["free_mb"] < svc.vram_min_mib:
-                        return ControlResult(key, False,
-                            f"GPU {gpu['index']} ({gpu['name']}) "
-                            f"a seulement {gpu['free_mb']:.0f} MiB libres "
-                            f"(min: {svc.vram_min_mib:.0f} MiB)")
+                gpus = vram.get("gpus", [])
+                total_free = sum(gpu["free_mb"] for gpu in gpus)
+                if total_free < svc.vram_min_mib:
+                    gpu_details = ", ".join(
+                        f"GPU {g['index']} ({g['name']}): {g['free_mb']:.0f} MiB"
+                        for g in gpus
+                    )
+                    return ControlResult(key, False,
+                        f"VRAM totale libre: {total_free:.0f} MiB "
+                        f"(min: {svc.vram_min_mib:.0f} MiB). "
+                        f"Detail: {gpu_details}")
 
         # Arreter le concurrent si groupe exclusif
         if svc.exclusive_group and self._active_key_getter:

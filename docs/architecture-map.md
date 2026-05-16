@@ -79,36 +79,40 @@ Compatibility wrapper (92 lignes, était 218) :
 - `tests/conftest.py` → `monitor.py` (via `import monitor`)
 - Tous les tests dépendent de `monitor.py` pour l'import de fonctions pures (`load_config`, `validate_config`, etc.)
 
-## Problèmes de qualité immédiats identifiés
+## Problèmes de qualité identifiés (audit 2026-05-16)
 
-### 1. Code legacy mort dans control.py (lignes 299-330)
-- `check_service_is_running(svc_conf)` — référence `run_subprocess_check_output()` (inexistante)
-- `kill_gpu_processes()` — référence `_init_controller()` (inexistante dans ce module)
+### 1. ~~Code legacy mort dans control.py (lignes 299-330)~~ — CORRIGÉ
+- `check_service_is_running()` et `kill_gpu_processes()` standalone n'existent plus.
+- `_kill_gpu_processes` est maintenant une méthode propre de `ServiceController`.
+- `_safe_process_pid()` utilisé, pas de refs à `run_subprocess_check_output` ni `_init_controller`.
 
-### 2. Fonctions standalone orphelines dans admin_auth.py (lignes 76-90)
-- `admin_login_required()` — référence `CONFIG` (global non défini dans ce module)
-- `check_admin_password()` — référence `CONFIG` (global non défini dans ce module)
-- Ces fonctions sont dupliquées dans monitor.py (versions avec dépendances correctes)
+### 2. ~~Fonctions standalone orphelines dans admin_auth.py~~ — CORRIGÉ
+- `AdminAuthRoutes` est une classe propre avec injection par constructeur.
+- Pas de fonctions standalone `admin_login_required`/`check_admin_password` dans ce fichier.
+- L'injection se fait via `runtime.py` → `is_admin_authenticated` / `check_admin_password`.
 
-### 3. app_factory.py utilise importlib pour charger monitor.py
-- `importlib.util.spec_from_file_location` — pattern fragile
-- Devrait appeler directement la factory interne
+### 3. ~~app_factory.py utilise importlib pour charger monitor.py~~ — CORRIGÉ
+- `app_factory.py` fait `from llm_dashboard.runtime import ...` directement.
+- Pas d'`importlib` nulle part.
 
-### 4. monitor.py est un méga-orchestrateur
-- Charge la config
-- Crée CommandRunner
-- Crée GPUMonitor
-- Crée tous les partials
-- Wire toutes les routes
-- Enregistre les signal handlers
-- Expose `app` et `CONFIG` comme module-level globals
+### 4. monitor.py — wrappers de compatibilité (toujours pertinent)
+- `monitor.py` est maintenant un wrapper minimal (76 lignes) qui :
+  - Re-exporte les fonctions pures pour les tests
+  - Appelle `create_full_app()` et expose `app`, `CONFIG`
+  - Crée des partials de compatibilité pour les tests
+- **Bug actif** : lignes 21-26 importent 4 symboles supprimés de `timings.py` :
+  - `extract_llama_timings` → renommé `_extract_llama_from_loglines`
+  - `extract_vllm_timings` → renommé `_extract_vllm_from_loglines`
+  - `LLAMA_TIMINGS` → supprimé
+  - `VLLM_TIMINGS` → supprimé
+- Ces imports cassent `import monitor` → 524 tests en ERROR.
 
-### 5. Duplication ops.py / control.py
-- Deux implémentations de start/stop coexistent
-- `ops.py` = adaptateur ancienne API
-- `control.py` = nouvelle API ServiceController
-- monitor.py utilise `ops.py` pour les partials, pas `control.py`
+### 5. ops.py / control.py — cohabitation voulue (pas un bug)
+- `ops.py` = adaptateur legacy qui délègue à `ServiceController` via `factory.py`.
+- `control.py` = API propre `ServiceController`.
+- `runtime.py` utilise directement `factory.py`, pas `ops.py`.
 
-### 6. admin_auth.py: classes utilisent monitor.py pour l'injection
-- Les classes `AdminAuthRoutes`, `AdminPanelRoute`, `AdminAPIRoutes` sont propres
-- Mais monitor.py doit créer et injecter `admin_login_required` et `check_admin_password`
+### 6. ~~admin_auth.py: classes utilisent monitor.py pour l'injection~~ — CORRIGÉ
+- L'injection se fait via `runtime.py` (dataclass `RuntimeDependencies`).
+- `app_factory.py` wire les dépendances proprement.
+- `monitor.py` n'est plus responsable de l'injection.

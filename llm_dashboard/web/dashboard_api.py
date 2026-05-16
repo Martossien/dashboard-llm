@@ -156,6 +156,16 @@ class DashboardAPIRoute:
                     llama_pr, llama_gr = get_llama_timings()
                 elif active_on_8080 == vllm_key:
                     vllm_pr, vllm_gr = get_vllm_timings()
+
+                for svc_key, rate in service_token_rates.items():
+                    svc = config.get("services", {}).get(svc_key, {})
+                    backend = svc.get("backend", "") if isinstance(svc, dict) else ""
+                    if backend == "vllm" and vllm_pr is None and vllm_gr is None:
+                        vllm_pr = rate.get("prompt")
+                        vllm_gr = rate.get("generation")
+                    elif backend in ("llama.cpp", "ik_llama.cpp") and llama_pr is None and llama_gr is None:
+                        llama_pr = rate.get("prompt")
+                        llama_gr = rate.get("generation")
             except Exception as e:
                 logger.error("get_llama/vllm_timings failed: %s", e)
 
