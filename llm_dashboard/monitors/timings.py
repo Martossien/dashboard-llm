@@ -19,6 +19,7 @@ logger = logging.getLogger("dashboard-llm.monitors.timings")
 
 # Cache par service
 _TIMINGS_CACHE = {}
+_CACHE_TTL_SECONDS = 120
 
 
 def _extract_rates_from_metrics(metrics: dict) -> tuple[float | None, float | None]:
@@ -202,8 +203,10 @@ def get_services_token_rates(config: dict) -> dict:
             }
 
         cached = _TIMINGS_CACHE.get(svc_key)
-        if cached:
+        if cached and (now - cached.get("last_update", 0)) < _CACHE_TTL_SECONDS:
             rates[svc_key] = cached
+        elif cached:
+            del _TIMINGS_CACHE[svc_key]
 
     return rates
 
@@ -211,12 +214,13 @@ def get_services_token_rates(config: dict) -> dict:
 # Backward compatibility: keep old function signatures for runtime.py
 def get_llama_timings(config: dict, get_log_file_fn) -> tuple[float | None, float | None]:
     rates = get_services_token_rates(config)
+    now = time.time()
     for svc_key, rate in rates.items():
         svc = config.get("services", {}).get(svc_key, {})
         backend = svc.get("backend", "")
         if backend in ("llama.cpp", "ik_llama.cpp"):
             cached = _TIMINGS_CACHE.get(svc_key)
-            if cached and _is_service_healthy(config, svc_key):
+            if cached and _is_service_healthy(config, svc_key) and (now - cached.get("last_update", 0)) < _CACHE_TTL_SECONDS:
                 return cached.get("prompt"), cached.get("generation")
     return None, None
 
@@ -240,8 +244,12 @@ def _is_service_healthy(config, svc_key):
 
 def get_vllm_timings(config: dict) -> tuple[float | None, float | None]:
     rates = get_services_token_rates(config)
+    now = time.time()
     for svc_key, rate in rates.items():
         svc = config.get("services", {}).get(svc_key, {})
         if svc.get("backend") == "vllm":
-            return rate.get("prompt"), rate.get("generation")
+            cached = _TIMINGS_CACHE.get(svc_key)
+            if cached and (now - cached.get("last_update", 0)) < _CACHE_TTL_SECONDS:
+                return rate.get("prompt"), rate.get("generation")
+            return None, None
     return None, None
