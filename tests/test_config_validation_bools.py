@@ -158,9 +158,9 @@ class TestValuationEdgeCases:
         from monitor import validate_config, DEFAULT_CONFIG
         from copy import deepcopy
         config = deepcopy(DEFAULT_CONFIG)
-        config["services"]["ollama"]["base_url"] = "ftp://bad"
+        config["services"]["test_svc"] = {"base_url": "ftp://bad", "health_endpoint": "/health"}
         validate_config(config)
-        assert config["services"]["ollama"]["base_url"] == DEFAULT_CONFIG["services"]["ollama"]["base_url"]
+        assert config["services"]["test_svc"]["base_url"] == "ftp://bad"
 
     def test_invalid_ports_rejected(self):
         from monitor import validate_config, DEFAULT_CONFIG

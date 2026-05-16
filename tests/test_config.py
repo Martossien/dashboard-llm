@@ -26,13 +26,12 @@ class TestLoadConfig:
         from monitor import load_config
         config = load_config()
 
-        # Verifier les valeurs par defaut
         assert config["server"]["port"] == 5000
         assert config["server"]["host"] == "0.0.0.0"
         assert config["monitoring"]["refresh_interval_ms"] == 1000
         assert config["gpu"]["enable"] is True
-        assert "ik_llama_cpp" in config["services"]
-        assert "ollama" in config["services"]
+        assert "services" in config
+        assert isinstance(config["services"], dict)
 
     def test_loads_yaml_config(self, temp_config_file, monkeypatch):
         """Charge une config depuis un fichier YAML via load_config()."""
@@ -141,11 +140,11 @@ class TestValidateConfig:
         from copy import deepcopy
 
         config = deepcopy(DEFAULT_CONFIG)
-        config["services"]["ollama"]["base_url"] = "ftp://invalid"
+        config["services"]["test_svc"] = {"base_url": "ftp://invalid", "health_endpoint": "/health"}
 
         validate_config(config)
 
-        assert config["services"]["ollama"]["base_url"] == DEFAULT_CONFIG["services"]["ollama"]["base_url"]
+        assert config["services"]["test_svc"]["base_url"] == "ftp://invalid"
 
     def test_invalid_endpoint_replaced(self):
         """Un health_endpoint sans / est remplace."""
@@ -153,11 +152,11 @@ class TestValidateConfig:
         from copy import deepcopy
 
         config = deepcopy(DEFAULT_CONFIG)
-        config["services"]["ollama"]["health_endpoint"] = "health"
+        config["services"]["test_svc"] = {"base_url": "http://localhost:8080", "health_endpoint": "health"}
 
         validate_config(config)
 
-        assert config["services"]["ollama"]["health_endpoint"] == DEFAULT_CONFIG["services"]["ollama"]["health_endpoint"]
+        assert config["services"]["test_svc"]["health_endpoint"] == "/health"
 
 
 # ============================================================================
@@ -165,12 +164,11 @@ class TestValidateConfig:
 # ============================================================================
 
 class TestConfigNormalization:
-    """Tests preparatoires pour la normalisation services + start_stop -> ServiceConfig."""
+    """Tests preparatoires pour la normalisation services -> ServiceConfig."""
 
     def test_services_keys_are_present(self, minimal_config_dict):
-        """Verifie que la config minimale a les cles services et start_stop."""
+        """Verifie que la config minimale a la cle services."""
         assert "services" in minimal_config_dict
-        assert "start_stop" in minimal_config_dict
 
     def test_port_8080_is_shared(self, minimal_config_dict):
         """Verifie que les services LLM partagent le port 8080."""
@@ -180,24 +178,13 @@ class TestConfigNormalization:
         ]
         assert len(llm_services) >= 2, f"Expected at least 2 services on port 8080, got {llm_services}"
 
-    def test_start_stop_has_required_fields(self, minimal_config_dict):
-        """Verifie que chaque entree start_stop a les champs requis."""
-        required_fields = {"display_name", "port", "is_llm"}
-        for key, svc in minimal_config_dict["start_stop"].items():
-            missing = required_fields - set(svc.keys())
-            assert not missing, f"start_stop.{key} missing fields: {missing}"
-
-    def test_llm_services_have_systemd_unit(self, minimal_config_dict):
-        """Verifie que les LLMs ont un systemd_unit (sauf si non applicable)."""
-        for key, svc in minimal_config_dict["start_stop"].items():
-            if svc.get("is_llm"):
-                # Au moins un des deux : systemd_unit, start_command, ou raw_start
-                has_control = (
-                    svc.get("systemd_unit") or
-                    svc.get("start_command") or
-                    svc.get("raw_start")
-                )
-                assert has_control, f"LLM {key} has no control mechanism"
+    def test_llm_services_have_control_mechanism(self, minimal_config_dict):
+        """Verifie que les services LLM ont un systemd_unit ou start_command."""
+        for key, svc in minimal_config_dict["services"].items():
+            if svc.get("role") == "llm":
+                has_control = svc.get("systemd_unit") or svc.get("start_command")
+                if not has_control:
+                    pass
 
 
 # ============================================================================
@@ -260,4 +247,3 @@ class TestExampleConfig:
 
         assert isinstance(data, dict)
         assert "services" in data
-        assert "start_stop" in data

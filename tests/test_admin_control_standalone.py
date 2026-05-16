@@ -81,8 +81,6 @@ class TestClassInstantiation:
             get_logs=lambda: {},
             get_client_ips=lambda: [],
             detect_model_name=lambda: "Unknown",
-            find_ik_llama_process=lambda: None,
-            find_llama_process=lambda: None,
         )
         assert isinstance(instance, DashboardAPIRoute)
 

@@ -39,8 +39,6 @@ class TestDashboardAPIGPUProcessRobustness:
             get_logs=lambda: {},
             get_client_ips=lambda: [],
             detect_model_name=lambda: "unknown",
-            find_ik_llama_process=lambda: None,
-            find_llama_process=lambda: None,
             get_gpu_processes=lambda: mock_processes,
         ).register(app)
 

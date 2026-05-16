@@ -183,7 +183,7 @@ class TestPublicApiIntegration:
         assert response.status_code == 200
         data = response.get_json()
         assert "services" in data
-        assert "active_on_ports" in data
+        assert "active_services_by_group" in data
 
     def test_api_v1_metrics_returns_dict(self, client):
         response = client.get("/api/v1/metrics")

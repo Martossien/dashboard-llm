@@ -64,7 +64,7 @@ class TestStartService:
         assert "inconnu" in r.message.lower()
 
     def test_no_start_command(self, mock_runner):
-        svc = _make_svc("test", start_command=())
+        svc = _make_svc("test", start_command=(), systemd_unit=None)
         reg = _make_registry(svc)
         ctrl = ServiceController(reg, mock_runner)
         r = ctrl.start_service("test")
@@ -78,7 +78,34 @@ class TestStartService:
         ctrl = ServiceController(reg, mock_runner, vram_checker=low_vram)
         r = ctrl.start_service("test")
         assert not r.success
-        assert "MiB libres" in r.message
+        assert "VRAM totale libre" in r.message
+        assert "50000" in r.message
+
+    def test_insufficient_vram_multi_gpu(self, mock_runner):
+        svc = _make_svc("test", vram_min_mib=50000)
+        reg = _make_registry(svc)
+        def multi_gpu_vram():
+            return {"enabled": True, "gpus": [
+                {"index": 0, "name": "RTX 3090", "free_mb": 24109},
+                {"index": 1, "name": "RTX 3090", "free_mb": 24109},
+            ]}
+        ctrl = ServiceController(reg, mock_runner, vram_checker=multi_gpu_vram)
+        r = ctrl.start_service("test")
+        assert not r.success
+        assert "VRAM totale libre" in r.message
+        assert "48218" in r.message
+
+    def test_sufficient_vram_multi_gpu(self, mock_runner, mock_port_free):
+        svc = _make_svc("test", vram_min_mib=50000, exclusive_group=None)
+        reg = _make_registry(svc)
+        def multi_gpu_vram():
+            return {"enabled": True, "gpus": [
+                {"index": 0, "name": "RTX 3090", "free_mb": 26000},
+                {"index": 1, "name": "RTX 3090", "free_mb": 26000},
+            ]}
+        ctrl = ServiceController(reg, mock_runner, vram_checker=multi_gpu_vram, port_checker=mock_port_free)
+        r = ctrl.start_service("test")
+        assert r.success
 
     def test_success(self, mock_runner, mock_vram, mock_port_free):
         svc = _make_svc("test", exclusive_group=None, vram_min_mib=0)

@@ -190,8 +190,6 @@ def _register_dashboard_api(app):
         get_logs=lambda: {"ik_llama_cpp": ["log"]},
         get_client_ips=lambda: ["10.0.0.1"],
         detect_model_name=lambda: "glm",
-        find_ik_llama_process=lambda: None,
-        find_llama_process=lambda: None,
     ).register(app)
 
 

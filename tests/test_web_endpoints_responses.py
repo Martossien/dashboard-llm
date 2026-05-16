@@ -70,8 +70,6 @@ def _register_dashboard_api(app, config):
         get_logs=lambda: {},
         get_client_ips=lambda: ["192.168.1.100"],
         detect_model_name=lambda: "glm-4.7-iq5",
-        find_ik_llama_process=lambda: None,
-        find_llama_process=lambda: None,
     ).register(app)
 
 
@@ -124,8 +122,8 @@ def _register_public_api(app, config):
         get_gpu_info=lambda: [],
         get_services_status=lambda: {
             "services": {"svc": "UP"},
-            "active_on_8080": "ik_llama_cpp",
-            "model_on_8080": "test-model",
+            "active_services": {},
+            "models_by_group": {},
         },
         detect_model_name=lambda: "test-model",
         get_logs=lambda: {},
@@ -178,8 +176,8 @@ class TestPublicRoutes:
         assert resp.status_code == 200
         data = resp.get_json()
         assert "services" in data
-        assert "active_on_ports" in data
-        assert "model_on_8080" in data
+        assert "active_services_by_group" in data
+        assert "models_by_group" in data
 
     def test_api_v1_metrics_returns_json(self, client):
         resp = client.get('/api/v1/metrics')

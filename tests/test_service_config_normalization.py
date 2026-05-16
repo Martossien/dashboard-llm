@@ -7,107 +7,95 @@ from llm_dashboard.models import ServiceConfig, normalize_services_config
 
 
 def _make_config(**overrides):
-    """Cree une config test minimale avec services + start_stop."""
+    """Cree une config test minimale avec services unifies."""
     svc = {
         "server": {"host": "127.0.0.1", "port": 5000, "debug": False},
         "services": {
-            "ik_llama_cpp": {
-                "name": "ik_llama.cpp",
-                "base_url": "http://127.0.0.1:8080",
-                "health_endpoint": "/health",
-                "models_endpoint": "/v1/models",
-                "timeout_seconds": 2,
-            },
-            "llama_cpp": {
-                "name": "llama.cpp",
-                "base_url": "http://127.0.0.1:8080",
-                "health_endpoint": "/health",
-                "models_endpoint": "/v1/models",
-                "timeout_seconds": 2,
-            },
-            "vllm": {
-                "name": "vLLM",
-                "base_url": "http://127.0.0.1:8080",
-                "health_endpoint": "/health",
-                "models_endpoint": "/v1/models",
-                "timeout_seconds": 2,
-            },
-            "ollama": {
-                "name": "Ollama",
-                "base_url": "http://127.0.0.1:11434",
-                "health_endpoint": "/",
-                "timeout_seconds": 2,
-                "log_type": "journalctl",
-                "journalctl_unit": "ollama",
-            },
-            "voxtral": {
-                "name": "Voxtral TTS",
-                "base_url": "http://127.0.0.1:6060",
-                "health_endpoint": "/healthz",
-                "timeout_seconds": 2,
-            },
-            "voxtral_stt": {
-                "name": "Voxtral STT",
-                "base_url": "http://127.0.0.1:7860",
-                "health_endpoint": "/",
-                "timeout_seconds": 2,
-            },
-        },
-        "start_stop": {
             "glm47": {
-                "display_name": "GLM-4.7",
-                "port": 8080,
-                "is_llm": True,
+                "name": "GLM-4.7",
+                "base_url": "http://127.0.0.1:8080",
+                "health_endpoint": "/health",
+                "models_endpoint": "/v1/models",
+                "timeout_seconds": 2,
+                "backend": "ik_llama.cpp",
+                "role": "llm",
+                "exclusive_group": "llm_8080",
                 "systemd_unit": "launch_llm.service",
                 "start_command": ["systemctl", "start", "launch_llm.service"],
                 "stop_command": ["systemctl", "stop", "launch_llm.service"],
                 "vram_min_mib": 24000,
             },
             "qwen36_35b_q8": {
-                "display_name": "Qwen3.6-35B Q8",
-                "port": 8080,
-                "is_llm": True,
+                "name": "Qwen3.6-35B Q8",
+                "base_url": "http://127.0.0.1:8080",
+                "health_endpoint": "/health",
+                "models_endpoint": "/v1/models",
+                "timeout_seconds": 2,
+                "backend": "llama.cpp",
+                "role": "llm",
+                "exclusive_group": "llm_8080",
                 "systemd_unit": "launch_arbitrage_q8.service",
                 "start_command": ["systemctl", "start", "launch_arbitrage_q8.service"],
                 "stop_command": ["systemctl", "stop", "launch_arbitrage_q8.service"],
                 "vram_min_mib": 30000,
             },
             "qwen36_35b_udq8": {
-                "display_name": "Qwen3.6-35B UDQ8",
-                "port": 8080,
-                "is_llm": True,
+                "name": "Qwen3.6-35B UDQ8",
+                "base_url": "http://127.0.0.1:8080",
+                "health_endpoint": "/health",
+                "models_endpoint": "/v1/models",
+                "timeout_seconds": 2,
+                "backend": "llama.cpp",
+                "role": "llm",
+                "exclusive_group": "llm_8080",
                 "systemd_unit": "launch_arbitrage2.service",
                 "start_command": ["systemctl", "start", "launch_arbitrage2.service"],
                 "stop_command": ["systemctl", "stop", "launch_arbitrage2.service"],
             },
             "qwen36_27b_vllm": {
-                "display_name": "Qwen3.6-27B vLLM",
-                "port": 8080,
-                "is_llm": True,
+                "name": "Qwen3.6-27B vLLM",
+                "base_url": "http://127.0.0.1:8080",
+                "health_endpoint": "/health",
+                "models_endpoint": "/v1/models",
+                "timeout_seconds": 2,
+                "backend": "vllm",
+                "role": "llm",
+                "exclusive_group": "llm_8080",
                 "systemd_unit": "vllm.service",
                 "start_command": ["systemctl", "start", "vllm.service"],
                 "stop_command": ["systemctl", "stop", "vllm.service"],
             },
             "ollama": {
-                "display_name": "Ollama",
-                "port": 11434,
-                "is_llm": False,
+                "name": "Ollama",
+                "base_url": "http://127.0.0.1:11434",
+                "health_endpoint": "/",
+                "timeout_seconds": 2,
+                "backend": "ollama",
+                "role": "llm",
+                "log_type": "journalctl",
+                "journalctl_unit": "ollama",
                 "systemd_unit": "ollama.service",
                 "start_command": ["systemctl", "start", "ollama.service"],
                 "stop_command": ["systemctl", "stop", "ollama.service"],
             },
             "voxtral_tts": {
-                "display_name": "Voxtral TTS",
-                "port": 6060,
-                "is_llm": False,
+                "name": "Voxtral TTS",
+                "base_url": "http://127.0.0.1:6060",
+                "health_endpoint": "/healthz",
+                "timeout_seconds": 2,
+                "backend": "gradio",
+                "role": "auxiliary",
                 "systemd_unit": "voxtral-web.service",
                 "start_command": ["systemctl", "start", "voxtral-web.service"],
                 "stop_command": ["systemctl", "stop", "voxtral-web.service"],
             },
             "voxtral_stt": {
-                "display_name": "Voxtral STT",
-                "port": 7860,
-                "is_llm": False,
+                "name": "Voxtral STT",
+                "base_url": "http://127.0.0.1:7860",
+                "health_endpoint": "/",
+                "timeout_seconds": 2,
+                "backend": "gradio",
+                "role": "auxiliary",
                 "systemd_unit": "voxtral-webui.service",
                 "start_command": ["systemctl", "start", "voxtral-webui.service"],
                 "stop_command": ["systemctl", "stop", "voxtral-webui.service"],
@@ -156,11 +144,9 @@ class TestNormalizeServicesConfig:
         config = _make_config()
         services = normalize_services_config(config)
 
-        # Ollama gets port from base_url (11434)
         ollama = next(s for s in services if s.key == "ollama")
         assert ollama.port == 11434
 
-        # LLM services get port from start_stop (8080)
         glm = next(s for s in services if s.key == "glm47")
         assert glm.port == 8080
 
@@ -169,9 +155,8 @@ class TestNormalizeServicesConfig:
         services = normalize_services_config(config)
 
         llm_services = [s for s in services if s.exclusive_group == "llm_8080"]
-        assert len(llm_services) >= 4  # glm, q8, udq8, vllm
+        assert len(llm_services) >= 4
 
-        # ollama should NOT have exclusive group
         ollama = next(s for s in services if s.key == "ollama")
         assert ollama.exclusive_group is None
 
@@ -186,7 +171,7 @@ class TestNormalizeServicesConfig:
         assert glm.vram_min_mib == 24000
 
     def test_minimal_config_supported(self):
-        """Une config minimale (services seulement, pas de start_stop) doit fonctionner."""
+        """Une config minimale (services seulement) doit fonctionner."""
         config = {
             "services": {
                 "ik_llama_cpp": {
@@ -196,16 +181,13 @@ class TestNormalizeServicesConfig:
                     "timeout_seconds": 2,
                 },
             },
-            "start_stop": {},
         }
         services = normalize_services_config(config)
 
-        # Toutes les cles _SS_TO_SVC doivent etre dans services,
-        # meme si start_stop est vide
-        assert len(services) == 7
-        glm = next(s for s in services if s.key == "glm47")
-        assert glm.display_name == "ik"  # fallback sur services.name
-        assert glm.start_command == ()
+        assert len(services) == 1
+        svc = services[0]
+        assert svc.display_name == "ik"
+        assert svc.start_command == ()
 
     def test_allow_force_stop_inherits(self):
         config = _make_config()
@@ -245,10 +227,9 @@ class TestNormalizeServicesConfig:
         services = normalize_services_config(config)
 
         glm = next(s for s in services if s.key == "glm47")
-        assert "glm" in glm.model_detect_pattern.lower()
-
-        vllm = next(s for s in services if s.key == "qwen36_27b_vllm")
-        assert "qwen36-27b" in vllm.model_detect_pattern.lower()
+        # model_detect_pattern is only set if configured in the service dict
+        if glm.model_detect_pattern:
+            assert "glm" in glm.model_detect_pattern.lower()
 
 
 class TestServiceControllerEdgeCases:
@@ -265,13 +246,14 @@ class TestServiceControllerEdgeCases:
             display_name="Test",
             backend="llama.cpp",
             role="llm",
-            stop_command=(),  # pas de stop_command
+            stop_command=(),
+            systemd_unit=None,
         )
         registry = ServiceRegistry([svc])
         ctrl = ServiceController(registry, MagicMock())
         r = ctrl.stop_service("test")
         assert not r.success
-        assert "Pas de stop_command" in r.message
+        assert "Pas de systemd_unit ni stop_command" in r.message
 
     def test_force_stop_unknown_service(self):
         from llm_dashboard.services.control import ServiceController

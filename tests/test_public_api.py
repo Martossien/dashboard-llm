@@ -21,6 +21,8 @@ def _register_public_api(app):
         ],
         get_services_status=lambda: {
             "services": {'svc"one': "UP", "svc_down": "DOWN"},
+            "active_services": {},
+            "models_by_group": {},
             "active_on_8080": "llama_cpp",
             "model_on_8080": "model-a",
         },
@@ -56,9 +58,7 @@ def test_public_json_endpoints():
     client = app.test_client()
 
     assert client.get("/api/v1/gpus").get_json()["gpus"][0]["temp"] == 55
-    assert client.get("/api/v1/services").get_json()["active_on_ports"] == {
-        "8080": "llama_cpp"
-    }
+    assert client.get("/api/v1/services").get_json()["active_services_by_group"] == {}
     metrics = client.get("/api/v1/metrics").get_json()
     assert metrics["cpu"] == {"load": 12.5}
     assert metrics["model"] == 'model"quoted'
