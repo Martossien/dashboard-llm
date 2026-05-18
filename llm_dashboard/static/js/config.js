@@ -188,11 +188,23 @@ function onBackendChange() {
     fetch('/api/admin/config/backend-defaults?backend=' + backend, {credentials:'same-origin'})
     .then(r => r.json())
     .then(defs => {
-        const execStart = document.getElementById('svc-exec-start');
-        if (defs.exec_start_template && !execStart.value) {
-            execStart.value = defs.exec_start_template;
+        if (defs.exec_start_template && !document.getElementById('svc-exec-start').value) {
+            document.getElementById('svc-exec-start').value = defs.exec_start_template;
         }
-        if (defs.health_endpoint && !document.getElementById('svc-url').value) {
+        if (defs.health_endpoint && !document.getElementById('svc-health-endpoint').value) {
+            document.getElementById('svc-health-endpoint').value = defs.health_endpoint;
+        }
+        if (defs.models_endpoint && !document.getElementById('svc-models-endpoint').value) {
+            document.getElementById('svc-models-endpoint').value = defs.models_endpoint;
+        }
+        if (defs.timeout_seconds && !document.getElementById('svc-timeout').value) {
+            document.getElementById('svc-timeout').value = defs.timeout_seconds;
+        }
+        if (defs.startup_time_seconds && !document.getElementById('svc-startup-time').value) {
+            document.getElementById('svc-startup-time').value = defs.startup_time_seconds;
+        }
+        if (defs.process_patterns && defs.process_patterns.length && !document.getElementById('svc-process-patterns').value) {
+            document.getElementById('svc-process-patterns').value = defs.process_patterns.join(', ');
         }
     }).catch(() => {});
 }
@@ -201,6 +213,33 @@ function suggestUnit() {
     const key = document.getElementById('svc-key').value || 'mon-service';
     document.getElementById('svc-unit').value = key + '.service';
     document.getElementById('svc-url').value = 'http://127.0.0.1:' + (document.getElementById('svc-port').value || '8000');
+}
+
+function _clearForm() {
+    document.getElementById('svc-key').value = '';
+    document.getElementById('svc-key').readOnly = false;
+    document.getElementById('svc-key').style.opacity = '1';
+    document.getElementById('svc-key-hint').textContent = 'Ex: vllm_qwen27b, llama_heretic, claude_code_proxy';
+    document.getElementById('svc-name').value = '';
+    document.getElementById('svc-role').value = 'llm';
+    document.getElementById('svc-backend').value = 'vllm';
+    document.getElementById('svc-port').value = '';
+    document.getElementById('svc-url').value = '';
+    document.getElementById('svc-health-endpoint').value = '';
+    document.getElementById('svc-models-endpoint').value = '';
+    document.getElementById('svc-timeout').value = '';
+    document.getElementById('svc-unit').value = '';
+    document.getElementById('svc-model').value = '';
+    document.getElementById('svc-exec-start').value = '';
+    document.getElementById('svc-logfile').value = '';
+    document.getElementById('svc-log-filter').value = 'default';
+    document.getElementById('svc-startup-time').value = '';
+    document.getElementById('svc-model-detect').value = '';
+    document.getElementById('svc-process-patterns').value = '';
+    document.getElementById('svc-process-exclude').value = '';
+    document.getElementById('svc-start-command').value = '';
+    document.getElementById('svc-stop-command').value = '';
+    document.getElementById('svc-group').value = '';
 }
 
 function _collectServiceData() {
@@ -229,6 +268,7 @@ function _collectServiceData() {
         start_command: startCmd ? startCmd.split(/\s+/) : null,
         stop_command: stopCmd ? stopCmd.split(/\s+/) : null,
         exclusive_group: document.getElementById('svc-group').value || null,
+        exec_start: document.getElementById('svc-exec-start').value || null,
     };
     return data;
 }
@@ -399,6 +439,7 @@ function editService(key) {
         const svc = svcs[key];
         if (!svc) return;
         switchTab('add');
+        _clearForm();
         const keyInput = document.getElementById('svc-key');
         keyInput.value = key;
         keyInput.readOnly = true;
@@ -406,7 +447,7 @@ function editService(key) {
         document.getElementById('svc-key-hint').textContent = 'Modification de ' + key + ' — les champs non modifiés sont conserves.';
         document.getElementById('svc-name').value = svc.name || key;
         document.getElementById('svc-role').value = svc.role || 'llm';
-        document.getElementById('svc-backend').value = svc.backend || 'auto';
+        document.getElementById('svc-backend').value = svc.backend || 'vllm';
         document.getElementById('svc-port').value = svc.port || '';
         document.getElementById('svc-url').value = svc.base_url || '';
         document.getElementById('svc-health-endpoint').value = svc.health_endpoint || '';
@@ -420,13 +461,16 @@ function editService(key) {
         document.getElementById('svc-model-detect').value = svc.model_detect_pattern || '';
         document.getElementById('svc-process-patterns').value = (svc.process_patterns || []).join(', ');
         document.getElementById('svc-process-exclude').value = (svc.process_exclude_patterns || []).join(', ');
-        // Parse start_command/stop_command from array to string
         const startCmd = svc.start_command || [];
         const stopCmd = svc.stop_command || [];
         document.getElementById('svc-start-command').value = startCmd.join(' ');
         document.getElementById('svc-stop-command').value = stopCmd.join(' ');
         document.getElementById('svc-group').value = svc.exclusive_group || '';
-        // Try to load actual ExecStart from existing .service file
+        // Set exec_start from config data first
+        if (svc.exec_start) {
+            document.getElementById('svc-exec-start').value = svc.exec_start;
+        }
+        // Then try to load actual ExecStart from systemd .service file (overrides config)
         const unit = svc.systemd_unit;
         if (unit) {
             fetch('/api/admin/config/systemd/read?unit=' + encodeURIComponent(unit), {credentials:'same-origin'})
@@ -435,9 +479,7 @@ function editService(key) {
                 if (data.exec_start) {
                     document.getElementById('svc-exec-start').value = data.exec_start;
                 }
-            }).catch(() => { onBackendChange(); });
-        } else {
-            onBackendChange();
+            }).catch(() => {});
         }
     });
 }

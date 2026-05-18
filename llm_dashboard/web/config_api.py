@@ -472,6 +472,21 @@ def install_systemd_unit(svc_key, svc_data):
 def create_config_api(config, is_admin_authenticated) -> Blueprint:
     bp = Blueprint("config_api", __name__)
 
+    def _check_csrf():
+        csrf_enabled = config.get("admin", {}).get("csrf_enabled", False)
+        if not csrf_enabled:
+            return True
+        csrf_header = config.get("admin", {}).get("csrf_header", "X-CSRF-Token")
+        token = request.headers.get(csrf_header, "")
+        import secrets
+        expected = session.get("csrf_token", "")
+        if not token or not expected or not secrets.compare_digest(token, expected):
+            logger.warning("CSRF validation failed on config API from %s", request.remote_addr or "unknown")
+            return False
+        return True
+
+    UNIT_NAME_RE = re.compile(r'^[A-Za-z0-9_.@:-]+\.service$')
+
     @bp.route("/api/admin/config/audit")
     def api_audit():
         if not is_admin_authenticated():
@@ -508,11 +523,25 @@ def create_config_api(config, is_admin_authenticated) -> Blueprint:
     def api_add_service():
         if not is_admin_authenticated():
             return jsonify({"error": "Unauthorized"}), 401
+        if not _check_csrf():
+            return jsonify({"error": "csrf_failed"}), 403
         data = request.get_json(force=True)
         svc_key = data.get("key", "").strip()
         if not svc_key:
             return jsonify({"error": "Missing service key"}), 400
-        ok = add_or_update_service(svc_key, data)
+        if not re.match(r'^[a-zA-Z0-9_-]+$', svc_key):
+            return jsonify({"error": "Invalid key format: use letters, digits, hyphens, underscores"}), 400
+        ALLOWED_FIELDS = {
+            'name', 'backend', 'role', 'base_url', 'port', 'health_endpoint',
+            'models_endpoint', 'timeout_seconds', 'systemd_unit', 'model_path',
+            'log_file', 'log_filter', 'log_type', 'startup_time_seconds',
+            'model_detect_pattern', 'process_patterns', 'process_exclude_patterns',
+            'start_command', 'stop_command', 'exclusive_group', 'exec_start',
+            'stop_timeout_seconds', 'journalctl_unit', 'journalctl_lines',
+            'vram_min_mib', 'process_exclude_patterns',
+        }
+        clean_data = {k: v for k, v in data.items() if k in ALLOWED_FIELDS and v is not None}
+        ok = add_or_update_service(svc_key, clean_data)
         if ok:
             _restart_dashboard()
         return jsonify({"success": ok, "key": svc_key})
@@ -521,6 +550,8 @@ def create_config_api(config, is_admin_authenticated) -> Blueprint:
     def api_delete_service(svc_key):
         if not is_admin_authenticated():
             return jsonify({"error": "Unauthorized"}), 401
+        if not _check_csrf():
+            return jsonify({"error": "csrf_failed"}), 403
         ok = delete_service(svc_key)
         if ok:
             _restart_dashboard()
@@ -530,6 +561,8 @@ def create_config_api(config, is_admin_authenticated) -> Blueprint:
     def api_generate_systemd():
         if not is_admin_authenticated():
             return jsonify({"error": "Unauthorized"}), 401
+        if not _check_csrf():
+            return jsonify({"error": "csrf_failed"}), 403
         data = request.get_json(force=True)
         svc_key = data.get("key", "untitled")
         content = generate_systemd_unit(svc_key, data)
@@ -539,6 +572,8 @@ def create_config_api(config, is_admin_authenticated) -> Blueprint:
     def api_install_systemd():
         if not is_admin_authenticated():
             return jsonify({"error": "Unauthorized"}), 401
+        if not _check_csrf():
+            return jsonify({"error": "csrf_failed"}), 403
         data = request.get_json(force=True)
         svc_key = data.get("key", "untitled")
         return jsonify(install_systemd_unit(svc_key, data))
@@ -547,6 +582,8 @@ def create_config_api(config, is_admin_authenticated) -> Blueprint:
     def api_restart():
         if not is_admin_authenticated():
             return jsonify({"error": "Unauthorized"}), 401
+        if not _check_csrf():
+            return jsonify({"error": "csrf_failed"}), 403
         ok = _restart_dashboard()
         return jsonify({"success": ok})
 
@@ -557,6 +594,8 @@ def create_config_api(config, is_admin_authenticated) -> Blueprint:
         unit = request.args.get("unit", "")
         if not unit:
             return jsonify({"exec_start": ""})
+        if not UNIT_NAME_RE.match(unit):
+            return jsonify({"error": "Invalid unit name"}), 400
         unit_path = f"/etc/systemd/system/{unit}"
         if not os.path.exists(unit_path):
             return jsonify({"exec_start": ""})
