@@ -1,6 +1,6 @@
 # Architecture Map — dashboard-llm (Updated post-refactor)
 
-**Dernière mise à jour** : 2026-04-30
+**Dernière mise à jour** : 2026-05-18
 
 ## Flux de création de l'application
 
@@ -12,16 +12,16 @@ cli.py / monitor.py
     → GPUMonitor()  (→ NvidiaBackend or NoGPUBackend)
     → partials (detection, logs, timings, ops)
     → create_app()  (→ Flask + WebRoutes)
-    → wiring routes (AdminAuth, AdminPanel, AdminAPI, DashboardAPI, register_public_api)
+    → wiring routes (AdminAuth, AdminPanel, AdminAPI, DashboardAPI, ConfigPanel, ConfigAPI, PublicAPI)
     → signal handlers (if setup_signals=True)
     → return (app, config)
 ```
 
 ## monitor.py — rôle actuel
 
-Compatibility wrapper (92 lignes, était 218) :
+Compatibility wrapper (70 lignes, était 218) :
+- Re-exporte les fonctions pures pour les tests (`load_config`, `validate_config`, etc.)
 - Appelle `create_full_app()` et expose `app` et `CONFIG` comme globals
-- Re-exporte `load_config`, `validate_config`, `DEFAULT_CONFIG`, etc. pour compatibilité des tests
 - Re-crée quelques partials pour compatibilité (`get_services_status`, etc.)
 - `if __name__ == '__main__'` lance le serveur
 
@@ -30,10 +30,12 @@ Compatibility wrapper (92 lignes, était 218) :
 |---------|----------------|------|
 | `app.py` | `create_app(config)` | Factory Flask minimale |
 | `routes.py` | `WebRoutes` | Routes simples (`/`, `/health`, `/help`) |
-| `dashboard_api.py` | `DashboardAPIRoute` | Route `/api/data` — JSON principal |
+| `dashboard_api.py` | `DashboardAPIRoute` | Route `/api/data` — JSON principal (inclut `active_llm_service_name`, `active_llama_service_name`) |
 | `admin_api.py` | `AdminAPIRoutes` | Routes `/api/admin/*` (start/stop/status/restart/force_stop) |
 | `admin_auth.py` | `AdminAuthRoutes` | Routes `/admin`, `/admin/login`, `/admin/logout` |
 | `admin_panel.py` | `AdminPanelRoute` | Route `/admin/panel` (HTML) |
+| `config_api.py` | `create_config_api()` | Routes `/api/admin/config/*` — audit, CRUD services, backend defaults, systemd generate/install, merge edit |
+| `config_panel.py` | `ConfigPanelRoute` | Route `/admin/config` (HTML — formulaire configuration) |
 | `metrics.py` | `create_metrics_endpoint`, `register_public_api` | `/metrics` Prometheus + `/api/v1/*` REST |
 
 ## Modules Services (llm_dashboard/services/)
@@ -41,9 +43,10 @@ Compatibility wrapper (92 lignes, était 218) :
 |---------|----------------|------|
 | `commands.py` | `CommandRunner`, `CommandResult` | Exécution centralisée sécurisée de commandes système |
 | `control.py` | `ServiceController`, `ControlResult` | Cycle de vie start/stop/restart/force_stop |
-| `ops.py` | `do_start_service`, `do_stop_service`, `stop_all_llm_engines` | Adaptateur legacy (Ancienne API start/stop) |
-| `detection.py` | `detect_model_name`, `get_services_status`, `get_admin_services_status`, etc. | Détection modèle/processus/services |
-| `health.py` | `check_service_health`, `check_port_is_open`, `wait_for_port_free` | Health checks réseau |
+| `ops.py` | `do_start_service`, `do_stop_service`, `stop_all_llm_engines` | Adaptateur legacy (délègue à ServiceController via factory.py) |
+| `factory.py` | `create_service_controller_from_config`, `control_result_to_dict`, `start_service_as_dict`, etc. | Factory pour ServiceController, adaptateurs dict pour ControlResult |
+| `detection.py` | `detect_model_name`, `get_services_status`, `get_admin_services_status`, `match_model`, `find_process_for_service`, etc. | Détection modèle/processus/services |
+| `health.py` | `check_service_health`, `check_port_is_open`, `wait_for_port_free`, `check_systemd_unit_active` | Health checks réseau et systemd |
 | `metrics.py` | `get_ollama_models`, `get_llama_metrics` | Métriques Ollama/llama.cpp Prometheus |
 | `registry.py` | `ServiceRegistry` | Index immuable des services (pur, sans I/O) |
 
@@ -56,8 +59,9 @@ Compatibility wrapper (92 lignes, était 218) :
 | `gpu/nvidia.py` | `NvidiaBackend` | Backend pynvml + nvidia-smi |
 | `gpu/nogpu.py` | `NoGPUBackend` | Fallback sans GPU |
 | `system.py` | `get_cpu_info`, `get_ram_info` | Métriques système (psutil) |
-| `logs.py` | `get_logs`, `get_client_ips`, `tail_log_lines`, `read_journalctl_logs` | Logs services |
-| `timings.py` | `get_llama_timings`, `get_vllm_timings`, `extract_llama_timings`, `extract_vllm_timings` | Timings tokens/s |
+| `logs.py` | `get_logs`, `get_client_ips`, `tail_log_lines`, `read_journalctl_logs`, `_resolve_filter_patterns`, `LOG_FILTER_PRESETS`, `BACKEND_LOG_FILTERS` | Logs services avec filtrage intelligent par backend |
+| `timings.py` | `get_services_token_rates`, `get_llama_timings`, `get_vllm_timings`, `_extract_llama_from_loglines`, `_extract_vllm_from_loglines` | Timings tokens/s (extraction depuis métriques Prometheus et logs) |
+| `gpu/processes.py` | `GPUProcess` (dataclass), `guess_gpu_process_service`, `process_vram_mib`, `normalize_gpu_process_dict` | Modèle et normalisation des processus GPU |
 | `startup.py` | `get_llama_startup_state`, `load_startup_stats`, `record_startup_duration` | État démarrage LLM |
 
 ## Configuration
@@ -66,18 +70,30 @@ Compatibility wrapper (92 lignes, était 218) :
 | `config.py` | Chargement, validation YAML, surcharges ENV, fonctions pures |
 | `models.py` | `ServiceConfig` (dataclass), `normalize_services_config()` |
 
+## Config API
+| Fichier | Classe/Fonction | Rôle |
+|---------|----------------|------|
+| `web/config_api.py` | `create_config_api()` | CRUD services, audit machine, backend defaults, systemd generate/install, merge edit |
+| `web/config_panel.py` | `ConfigPanelRoute` | Route `/admin/config` (HTML formulaire) |
+
+Fonctionnalités config_api :
+- `BACKEND_DEFAULTS` — defaults par backend (health_endpoint, models_endpoint, timeout, startup, process_patterns, systemd_killmode, exec_start_template)
+- `add_or_update_service()` — merge (les champs existants non dans le formulaire sont conservés)
+- `audit_machine()` — scan backends, models, ports, systemd units, GPUs
+- `generate_systemd_unit()` / `install_systemd_unit()` — génération et installation de .service
+
 ## Points d'entrée
 | Fichier | Rôle |
 |---------|------|
 | `cli.py` | `main()` — CLI entry point |
-| `app_factory.py` | `create_full_app()` — factory qui charge monitor.py via importlib |
+| `app_factory.py` | `create_full_app()` — factory qui charge config, crée les dépendances, wire les routes |
 | `monitor.py` | Point de compatibilité/composition — charge config, crée partials, wire routes |
 | `__main__.py` | `from llm_dashboard.cli import main` |
 
 ## Dépendance à monitor.py
-- `app_factory.py` → `monitor.py` (via `importlib.util.spec_from_file_location`)
-- `tests/conftest.py` → `monitor.py` (via `import monitor`)
-- Tous les tests dépendent de `monitor.py` pour l'import de fonctions pures (`load_config`, `validate_config`, etc.)
+- `app_factory.py` → `from llm_dashboard.runtime import ...` (imports directs, pas d'importlib)
+- `tests/conftest.py` → `import monitor` (chemin racine du projet)
+- monitor.py re-exporte les fonctions pures pour les tests
 
 ## Problèmes de qualité identifiés (audit 2026-05-16)
 
@@ -95,17 +111,11 @@ Compatibility wrapper (92 lignes, était 218) :
 - `app_factory.py` fait `from llm_dashboard.runtime import ...` directement.
 - Pas d'`importlib` nulle part.
 
-### 4. monitor.py — wrappers de compatibilité (toujours pertinent)
-- `monitor.py` est maintenant un wrapper minimal (76 lignes) qui :
+### 4. monitor.py — wrappers de compatibilité
+- `monitor.py` est un wrapper minimal qui :
   - Re-exporte les fonctions pures pour les tests
   - Appelle `create_full_app()` et expose `app`, `CONFIG`
   - Crée des partials de compatibilité pour les tests
-- **Bug actif** : lignes 21-26 importent 4 symboles supprimés de `timings.py` :
-  - `extract_llama_timings` → renommé `_extract_llama_from_loglines`
-  - `extract_vllm_timings` → renommé `_extract_vllm_from_loglines`
-  - `LLAMA_TIMINGS` → supprimé
-  - `VLLM_TIMINGS` → supprimé
-- Ces imports cassent `import monitor` → 524 tests en ERROR.
 
 ### 5. ops.py / control.py — cohabitation voulue (pas un bug)
 - `ops.py` = adaptateur legacy qui délègue à `ServiceController` via `factory.py`.
