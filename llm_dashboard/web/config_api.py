@@ -415,6 +415,7 @@ def delete_service(svc_key):
 
 SAFE_FLAT_RE = re.compile(r'^[^\n\r/]+$')
 SAFE_PATH_RE = re.compile(r'^[^\n\r]+$')
+SAFE_DESCRIPTION_RE = re.compile(r'^[^\n\r]+$')
 
 
 def _sanitize_flat_field(value, max_len=255):
@@ -431,6 +432,15 @@ def _sanitize_path_field(value, max_len=4096):
     if not s:
         return s
     if '..' in s or not SAFE_PATH_RE.match(s):
+        raise ValueError(f"Invalid value: {value!r}")
+    return s
+
+
+def _sanitize_description_field(value, max_len=255):
+    s = str(value).strip()[:max_len]
+    if not s:
+        return s
+    if not SAFE_DESCRIPTION_RE.match(s):
         raise ValueError(f"Invalid value: {value!r}")
     return s
 
@@ -463,14 +473,14 @@ def generate_systemd_unit(svc_key, svc_data):
     svc_key = _sanitize_flat_field(svc_key)
     backend = svc_data.get("backend", "auto")
     defaults = BACKEND_DEFAULTS.get(backend, BACKEND_DEFAULTS["proxy"])
-    name = _sanitize_flat_field(svc_data.get("name", svc_key))
+    name = _sanitize_description_field(svc_data.get("name", svc_key))
     user = _sanitize_flat_field(svc_data.get("systemd_user", "admin_ia"))
     ALLOWED_SYSTEMD_USERS = {"admin_ia", "root"}
     if user not in ALLOWED_SYSTEMD_USERS:
         raise ValueError(f"systemd_user '{user}' not allowed")
 
     # ExecStart: user-provided > template > empty
-    exec_start = svc_data.get("exec_start", "").replace("\n", " \\\n    ")
+    exec_start = svc_data.get("exec_start", "").replace("\r", "").replace("\n", " \\\n    ")
     if not exec_start:
         exec_start = defaults.get("exec_start_template", "")
 
@@ -597,6 +607,8 @@ def create_config_api(config, is_admin_authenticated) -> Blueprint:
             'vram_min_mib', 'systemd_user',
         }
         clean_data = {k: v for k, v in data.items() if k in ALLOWED_FIELDS and v is not None}
+        if 'systemd_unit' in clean_data and not re.match(r'^[A-Za-z0-9_.@:-]+\.service$', clean_data['systemd_unit']):
+            return jsonify({"error": "Invalid systemd unit name format"}), 400
         ok = add_or_update_service(svc_key, clean_data)
         if ok:
             _restart_dashboard()
@@ -608,6 +620,8 @@ def create_config_api(config, is_admin_authenticated) -> Blueprint:
             return jsonify({"error": "Unauthorized"}), 401
         if not _check_csrf():
             return jsonify({"error": "csrf_failed"}), 403
+        if not re.match(r'^[a-zA-Z0-9_-]+$', svc_key):
+            return jsonify({"error": "Invalid key format"}), 400
         ok = delete_service(svc_key)
         if ok:
             _restart_dashboard()

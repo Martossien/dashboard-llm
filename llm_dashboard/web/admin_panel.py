@@ -46,7 +46,7 @@ class AdminPanelRoute:
                 vram=vram,
                 service_logs=service_logs,
                 service_order=list(config["services"].keys()),
-                service_names={k: v["name"] for k, v in config["services"].items()},
+                service_names={k: (v.get("name", k) if isinstance(v, dict) else k) for k, v in config["services"].items()},
                 csrf_token=session.get("csrf_token", ""),
                 csrf_header=config.get("admin", {}).get("csrf_header", "X-CSRF-Token"),
             )
