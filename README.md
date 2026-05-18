@@ -21,6 +21,7 @@ Supports **vLLM**, **llama.cpp**, **ik_llama.cpp**, **SGLang**, **Ollama**, **LM
 - **Active LLM service tracking** — shows both the active LLM service name and the loaded model name
 - **Token rate tracking** — prompt + generation tok/s via Prometheus `/metrics`
 - **Admin panel** — start/stop/restart/force-kill with CSRF protection
+- **Config API** — field whitelist, input validation, atomic config writes, file locking
 - **Multi-backend** — vLLM, llama.cpp, ik_llama.cpp, SGLang, Ollama, LM Studio, Gradio, Proxy
 - **Exclusive groups** — shared-port LLMs with automatic mutual exclusion
 - **Web config page** — audit your machine, add/edit/delete services with merge semantics, generate systemd units

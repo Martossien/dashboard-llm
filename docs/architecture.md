@@ -92,30 +92,41 @@ Façade unifiée multi-backend :
 
 ## Routes admin
 
-| Route | Méthode | Auth |
-|-------|---------|------|
-| `/admin` | GET | Non |
-| `/admin/login` | POST | Non |
-| `/admin/logout` | GET | Non |
-| `/admin/panel` | GET | Oui |
-| `/admin/config` | GET | Oui |
-| `/api/admin/status` | GET | Oui |
-| `/api/admin/start` | POST | Oui |
-| `/api/admin/stop` | POST | Oui |
-| `/api/admin/restart` | POST | Oui |
-| `/api/admin/force_stop` | POST | Oui |
-| `/api/admin/stop_all_llm` | POST | Oui |
-| `/api/admin/vram` | GET | Oui |
-| `/api/admin/gpu/processes` | GET | Oui |
-| `/api/admin/config/audit` | GET | Oui |
-| `/api/admin/config/services` | GET | Oui |
-| `/api/admin/config/service` | POST | Oui |
-| `/api/admin/config/service/<key>` | DELETE | Oui |
-| `/api/admin/config/backend-defaults` | GET | Oui |
-| `/api/admin/config/systemd/generate` | POST | Oui |
-| `/api/admin/config/systemd/install` | POST | Oui |
-| `/api/admin/config/systemd/read` | GET | Oui |
-| `/api/admin/config/restart` | POST | Oui |
+| Route | Méthode | Auth | CSRF |
+|-------|---------|------|------|
+| `/admin` | GET | Non | — |
+| `/admin/login` | POST | Non | Non (génère le token) |
+| `/admin/logout` | GET | Oui | — |
+| `/admin/panel` | GET | Oui | — |
+| `/admin/config` | GET | Oui | — |
+| `/api/admin/status` | GET | Oui | — |
+| `/api/admin/start` | POST | Oui | Oui |
+| `/api/admin/stop` | POST | Oui | Oui |
+| `/api/admin/restart` | POST | Oui | Oui |
+| `/api/admin/force_stop` | POST | Oui | Oui |
+| `/api/admin/stop_all_llm` | POST | Oui | Oui |
+| `/api/admin/vram` | GET | Oui | — |
+| `/api/admin/gpu/processes` | GET | Oui | — |
+| `/api/admin/config/audit` | GET | Oui | — |
+| `/api/admin/config/services` | GET | Oui | — |
+| `/api/admin/config/service` | POST | Oui | Oui |
+| `/api/admin/config/service/<key>` | DELETE | Oui | Oui |
+| `/api/admin/config/backend-defaults` | GET | Oui | — |
+| `/api/admin/config/systemd/generate` | POST | Oui | Oui |
+| `/api/admin/config/systemd/install` | POST | Oui | Oui |
+| `/api/admin/config/systemd/read` | GET | Oui | — |
+| `/api/admin/config/restart` | POST | Oui | Oui |
+
+## Sécurité (config API)
+
+- **CSRF** : tous les POST/DELETE vérifient un token CSRF (sauf `/admin/login` qui le génère)
+- **Validation des clés** : `svc_key` doit matcher `^[a-zA-Z0-9_-]+$`
+- **Validation systemd_unit** : format `^[A-Za-z0-9_.@:-]+\.service$`
+- **Whitelist des champs** : seuls les champs dans `ALLOWED_FIELDS` sont acceptés (les autres sont ignorés)
+- **Sanitisation systemd** : `name`, `systemd_user` bloquent newlines et `..` ; `systemd_user` limité à `{admin_ia, root}` ; `log_file` bloquent newlines et `..`
+- **Écriture atomique** : `write_config()` utilise `tempfile` + `os.replace()` (pas de troncature possible)
+- **Verrou fichier** : `fcntl.flock()` protège les opérations read-modify-write sur `config.yaml`
+- **Path traversal** : `api_read_systemd` et `api_install_systemd` valident les noms d'unités
 
 ## Stratégie de tests
 

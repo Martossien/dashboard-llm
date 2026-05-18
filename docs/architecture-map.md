@@ -78,9 +78,10 @@ Compatibility wrapper (70 lignes, était 218) :
 
 Fonctionnalités config_api :
 - `BACKEND_DEFAULTS` — defaults par backend (health_endpoint, models_endpoint, timeout, startup, process_patterns, systemd_killmode, exec_start_template)
-- `add_or_update_service()` — merge (les champs existants non dans le formulaire sont conservés)
+- `add_or_update_service()` — merge (les champs existants non dans le formulaire sont conservés), verrou `fcntl.flock()`, écriture atomique (`tempfile` + `os.replace`)
 - `audit_machine()` — scan backends, models, ports, systemd units, GPUs
 - `generate_systemd_unit()` / `install_systemd_unit()` — génération et installation de .service
+- Sécurité : CSRF sur tous les POST/DELETE, validation des clés (`^[a-zA-Z0-9_-]+$`), whitelist `ALLOWED_FIELDS`, sanitisation systemd (newlines, `..`, users autorisés), validation `systemd_unit`, path traversal prevention
 
 ## Points d'entrée
 | Fichier | Rôle |

@@ -83,7 +83,12 @@ Section **Paramètres avancés** (collapsée par défaut) :
 - **Process patterns** : mots-clés pour détecter le processus
 - **Process exclude** : mots-clés à exclure de la détection
 
-**Comportement lors de l'édition** : les champs non modifiés sont conservés (merge, pas remplacement). La clé est en lecture seule.
+**Comportement lors de l'édition** : les champs non modifiés sont conservés (merge, pas remplacement). La clé est en lecture seule. Les champs inconnus sont ignorés (whitelist). CSRF requis sur toutes les soumissions.
+
+Contraintes de validation :
+- **Clé** : lettres, chiffres, tirets, underscores uniquement (`^[a-zA-Z0-9_-]+$`)
+- **Systemd unit** : format `.service` valide (`^[A-Za-z0-9_.@:-]+\.service$`)
+- **Nom du service** : pas de retours à la ligne (sanitisé dans le fichier systemd)
 
 Boutons :
 - **[👁 Aperçu YAML]** : montre le YAML généré avant de sauvegarder
