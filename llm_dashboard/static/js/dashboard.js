@@ -24,10 +24,15 @@
         }
 
         function updateDashboard(data) {
-            const llamaSvc = data.active_llama_service_name || data.llama_service_name;
+            // Semantic convention:
+            //   activeLlamaSvc — strictly llama-family backends (ik_llama.cpp, llama.cpp)
+            //   activeLlmSvc — whichever LLM backend is active on port 8080 (any backend)
+            //   isLlmGroupActive — at least one exclusive-group LLM is running
+            const activeLlamaSvc = data.active_llama_service_name;
+            const activeLlmSvc = data.active_llm_service_name;
             const activeServices = data.active_services || {};
-            const anyGroupActive = Object.values(activeServices).some(k => k);
-            const activeInGroup = anyGroupActive && Object.values(activeServices)[0];
+            const isLlmGroupActive = Object.values(activeServices).some(k => k);
+            const activeGroupKey = isLlmGroupActive ? Object.values(activeServices).find(k => k) : null;
 
             const serviceNames = data.service_names || {};
             const svcKeyByDisplay = {};
@@ -61,9 +66,9 @@
                 badge.textContent = `${service}: ${statusText}`;
                 wrapper.appendChild(badge);
                 
-                const currentLlamaSvc = data.active_llama_service_name || data.llama_service_name;
-                const isLlamaActive = anyGroupActive;
-                if (service === currentLlamaSvc && isLlamaActive && status === 'UP') {
+                // Slots: exclusive to llama-family backends
+                const isLlamaSvc = (service === activeLlamaSvc) && isLlmGroupActive;
+                if (isLlamaSvc && status === 'UP') {
                     if (typeof data.slots_active === 'number' && typeof data.slots_total === 'number' && data.slots_total > 0) {
                         const slotsLine = document.createElement('div');
                         slotsLine.style.fontSize = '11px';
@@ -74,25 +79,18 @@
                     }
                 }
 
-                if (service === currentLlamaSvc && isLlamaActive && (status === 'UP' || status === 'LOADING') && data.model_name && data.model_name !== 'Unknown') {
+                // Model name: display once for the active LLM service (any backend)
+                const isActiveLlm = activeLlmSvc && (service === activeLlmSvc);
+                if (isActiveLlm && (status === 'UP' || status === 'LOADING') && data.model_name && data.model_name !== 'Unknown') {
                     const modelName = document.createElement('div');
-                   modelName.style.fontSize = '11px';
+                    modelName.style.fontSize = '11px';
                     modelName.style.color = '#8b949e';
                     modelName.style.marginTop = '4px';
-                    modelName.textContent = `Model: ${data.model_name}`;
+                    modelName.textContent = `Model: ${data.model_on_8080 || data.model_name}`;
                     wrapper.appendChild(modelName);
                 }
 
-                const vllmActive = activeInGroup && service === data.vllm_service_name;
-                if (vllmActive && status === 'UP') {
-                    const vllmModel = document.createElement('div');
-                    vllmModel.style.fontSize = '11px';
-                    vllmModel.style.color = '#8b949e';
-                    vllmModel.style.marginTop = '4px';
-                    vllmModel.textContent = `Model: ${data.model_on_8080 || data.model_name || 'Unknown'}`;
-                    wrapper.appendChild(vllmModel);
-                }
-
+                // Token rates: for any active service
                 const svcKey = svcKeyByDisplay[service];
                 if (svcKey && tokenRates[svcKey] && (status === 'UP' || status === 'SLOW' || status === 'LOADING')) {
                     const rates = tokenRates[svcKey];
@@ -110,7 +108,8 @@
                     }
                 }
 
-                if (service === llamaSvc && isLlamaActive && data.llama_state === 'LOADING') {
+                // Loading state: exclusive to llama-family backends
+                if (isLlamaSvc && data.llama_state === 'LOADING') {
                     const loadingLine = document.createElement('div');
                     loadingLine.style.fontSize = '11px';
                     loadingLine.style.color = '#8b949e';
@@ -121,7 +120,8 @@
                     wrapper.appendChild(loadingLine);
                 }
 
-                if (service === llamaSvc && isLlamaActive && data.client_ips && data.client_ips.length > 0) {
+                // Client IPs: for the active LLM service (any backend)
+                if (isActiveLlm && data.client_ips && data.client_ips.length > 0) {
                     const lastIp = data.client_ips[data.client_ips.length - 1];
                     const ipLine = document.createElement('div');
                     ipLine.style.fontSize = '11px';

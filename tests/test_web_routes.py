@@ -27,6 +27,7 @@ REQUIRED_API_DATA_FIELDS = {
     "ik_llama_service_name",
     "vllm_service_name",
     "active_llama_service_name",
+    "active_llm_service_name",
     "llama_state",
     "llama_loading_seconds",
     "llama_eta_seconds",
@@ -223,6 +224,7 @@ def test_dashboard_api_returns_required_fields():
     assert data["cpu"] == {"load": 1.0}
     assert data["model_name"] == "glm"
     assert data["active_llama_service_name"] == "ik"
+    assert data["active_llm_service_name"] == "ik"
 
 
 def _register_admin_api(app, *, logged_in=True):

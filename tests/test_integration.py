@@ -88,7 +88,8 @@ class TestApiDataCompleteContract:
             "model_name", "prompt_tokens_per_second", "generation_tokens_per_second",
             "vllm_prompt_tokens_per_second", "vllm_generation_tokens_per_second",
             "client_ips", "llama_service_name", "ik_llama_service_name",
-            "vllm_service_name", "active_llama_service_name", "llama_state",
+            "vllm_service_name", "active_llama_service_name",
+            "active_llm_service_name", "llama_state",
             "llama_loading_seconds", "llama_eta_seconds", "llama_avg_load_seconds",
             "active_on_8080", "model_on_8080",
         }

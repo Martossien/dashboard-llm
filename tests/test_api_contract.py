@@ -33,6 +33,7 @@ REQUIRED_API_DATA_FIELDS = {
     "ik_llama_service_name",
     "vllm_service_name",
     "active_llama_service_name",
+    "active_llm_service_name",
     "llama_state",
     "llama_loading_seconds",
     "llama_eta_seconds",
@@ -194,6 +195,24 @@ class TestAPIDataContract:
         assert data["llama_service_name"] == CONFIG["services"]["llama_cpp"]["name"]
         assert data["ik_llama_service_name"] == CONFIG["services"]["ik_llama_cpp"]["name"]
         assert data["vllm_service_name"] == CONFIG["services"]["vllm"]["name"]
+
+    def test_active_llm_service_name_distinction(self, client):
+        """Verifie que active_llm_service_name est present et que la
+        distinction llama vs llm est correcte: si un service llama-family
+        est actif, les deux champs pointent vers lui; si vLLM est actif,
+        active_llama_service_name est None."""
+        response = client.get("/api/data")
+        data = response.get_json()
+
+        assert "active_llm_service_name" in data
+        active_8080 = data.get("active_on_8080")
+
+        if active_8080 in ("ik_llama_cpp", "llama_cpp"):
+            assert data["active_llama_service_name"] is not None
+            assert data["active_llm_service_name"] == data["active_llama_service_name"]
+        elif active_8080 is not None:
+            assert data["active_llama_service_name"] is None
+            assert data["active_llm_service_name"] is not None
 
 
 # ============================================================================

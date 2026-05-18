@@ -2,6 +2,12 @@
 Dashboard API route — /api/data.
 
 Portable : tous les noms de service, backends et groupes sont extraits dynamiquement de la config.
+
+Semantic convention:
+  - "llama" refers to llama-family backends (ik_llama.cpp, llama.cpp).
+  - "llm" refers to any LLM backend (llama-family + vLLM + future backends).
+  - active_llama_service_name: the active service name if it uses a llama-family backend, else None.
+  - active_llm_service_name: the display name of whichever LLM service is currently active on port 8080.
 """
 
 from __future__ import annotations
@@ -17,6 +23,11 @@ from llm_dashboard.monitors.gpu.processes import process_vram_mib
 def _get_service_name(config, key):
     svc = config.get("services", {}).get(key, {})
     return svc.get("name", key) if isinstance(svc, dict) else key
+
+
+def _get_service_backend(config, key):
+    svc = config.get("services", {}).get(key, {})
+    return svc.get("backend", "") if isinstance(svc, dict) else ""
 
 
 def _find_service_key_by_role(config, role):
@@ -90,6 +101,7 @@ class DashboardAPIRoute:
             models_by_group = services_payload.get('models_by_group', {})
 
             # Noms dynamiques des services (backward compat)
+            LLAMA_BACKENDS = {"ik_llama.cpp", "llama.cpp"}
             ik_key = None
             llama_key = None
             vllm_key = None
@@ -114,11 +126,15 @@ class DashboardAPIRoute:
             llama_name = _get_service_name(config, llama_key)
             vllm_name = _get_service_name(config, vllm_key)
 
+            # active_llama_name: strictly llama-family backends only
             active_llama_name = None
             if active_on_8080 in (ik_key, llama_key):
                 active_llama_name = _get_service_name(config, active_on_8080)
-            elif active_on_8080 in config.get("services", {}):
-                active_llama_name = _get_service_name(config, active_on_8080)
+
+            # active_llm_service_name: whichever LLM service is active (any backend)
+            active_llm_service_name = None
+            if active_on_8080 and active_on_8080 in config.get("services", {}):
+                active_llm_service_name = _get_service_name(config, active_on_8080)
 
             llama_health = services_payload.get('services', {}).get(
                 active_llama_name or llama_name) if active_llama_name else None
@@ -214,6 +230,7 @@ class DashboardAPIRoute:
                 'ik_llama_service_name': ik_name,
                 'vllm_service_name': vllm_name,
                 'active_llama_service_name': active_llama_name,
+                'active_llm_service_name': active_llm_service_name,
                 'llama_state': startup_state.get('state', 'DOWN'),
                 'llama_loading_seconds': startup_state.get('loading_seconds'),
                 'llama_eta_seconds': startup_state.get('eta_seconds'),
