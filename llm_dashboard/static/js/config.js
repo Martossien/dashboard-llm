@@ -54,8 +54,8 @@ function renderAudit(d) {
         const cls = info.found ? 'found' : 'missing';
         const icon = info.found ? '✅' : '❌';
         const path = info.path ? ' (' + info.path + ')' : '';
-        const click = info.found ? `onclick="selectBackend('${name}')" style="cursor:pointer"` : '';
-        html += `<span class="audit-item ${cls}" ${click}>${icon} ${name}${path}</span>`;
+        const click = info.found ? `onclick="selectBackend('${escAttr(name)}')" style="cursor:pointer"` : '';
+        html += `<span class="audit-item ${cls}" ${click}>${icon} ${escHtml(name)}${escHtml(path)}</span>`;
     }
     html += '</div>';
 
@@ -70,14 +70,14 @@ function renderAudit(d) {
             const gb = m.size_gb ? ` (${m.size_gb} GB)` : '';
             const fc = m.file_count > 1 ? ` (${m.file_count} fichiers${m.sharded ? ', sharded' : ''})` : '';
             const modelPath = m.first_gguf || m.path;
-            html += `<span class="audit-item found" onclick="selectModel('${escAttr(modelPath)}','${escAttr(m.name)}')" style="cursor:pointer" title="${escAttr(m.path)}">📁 ${m.name}${gb}${fc}</span>`;
+            html += `<span class="audit-item found" onclick="selectModel('${escAttr(modelPath)}','${escAttr(m.name)}')" style="cursor:pointer" title="${escAttr(m.path)}">📁 ${escHtml(m.name)}${escHtml(gb)}${escHtml(fc)}</span>`;
         });
         if (lmModels.length > 0) {
             html += '<br><span style="color:#d29922;font-size:11px;">📦 LM Studio:</span> ';
             lmModels.forEach(m => {
                 const fc = m.file_count > 1 ? ` (${m.file_count} fichiers${m.sharded ? ', sharded' : ''})` : '';
                 const modelPath = m.first_gguf || m.path;
-                html += `<span class="audit-item found" onclick="selectModel('${escAttr(modelPath)}','${escAttr(m.name)}')" style="cursor:pointer;border-color:#d29922;" title="${escAttr(m.path)}">📦 ${m.name}${fc}</span>`;
+                html += `<span class="audit-item found" onclick="selectModel('${escAttr(modelPath)}','${escAttr(m.name)}')" style="cursor:pointer;border-color:#d29922;" title="${escAttr(m.path)}">📦 ${escHtml(m.name)}${escHtml(fc)}</span>`;
             });
             if (lmCount > 6) html += `<span class="audit-item missing">+${lmCount - 6} autres</span>`;
         }
@@ -142,6 +142,10 @@ function selectPort(port) {
 
 function escAttr(s) {
     return (s || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function escHtml(s) {
+    return escAttr(s);
 }
 
 // ===================== ADD SERVICE =====================
@@ -395,9 +399,9 @@ async function loadServices() {
             const hCls = h === 'UP' ? 'health-up' : 'health-down';
             const roleBadge = role === 'llm' ? 'badge-llm' : (role === 'project' ? 'badge-project' : 'badge-aux');
             html += `<tr>
-                <td><strong>${name}</strong></td>
-                <td><span class="${roleBadge}">${role}</span></td>
-                <td>${backend}</td>
+                <td><strong>${escHtml(name)}</strong></td>
+                <td><span class="${roleBadge}">${escHtml(role)}</span></td>
+                <td>${escHtml(backend)}</td>
                 <td>${port}</td>
                 <td style="font-size:11px;color:#8b949e;">${logFilter}</td>
                 <td class="${hCls}">${h}</td>

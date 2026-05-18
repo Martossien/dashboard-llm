@@ -7,6 +7,7 @@ Config API routes — audit machine, manage services, generate systemd units.
 
 from __future__ import annotations
 
+import fcntl
 import logging
 import os
 import re
@@ -352,8 +353,14 @@ def write_config(config_data):
             shutil.copy2(CONFIG_YAML, bak)
     except Exception:
         pass
-    with open(CONFIG_YAML, "w") as f:
-        yaml.dump(config_data, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+    tmp_fd, tmp_path = tempfile.mkstemp(dir=os.path.dirname(CONFIG_YAML), suffix=".yaml.tmp")
+    try:
+        with os.fdopen(tmp_fd, 'w') as f:
+            yaml.dump(config_data, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+        os.replace(tmp_path, CONFIG_YAML)
+    except Exception:
+        os.unlink(tmp_path)
+        raise
 
 
 def get_services():
@@ -361,31 +368,72 @@ def get_services():
     return config.get("services", {})
 
 
+_config_lock_fd = open(os.path.join(tempfile.gettempdir(), "dashboard-llm-config.lock"), "w")
+
+
+def _acquire_config_lock():
+    fcntl.flock(_config_lock_fd, fcntl.LOCK_EX)
+
+
+def _release_config_lock():
+    fcntl.flock(_config_lock_fd, fcntl.LOCK_UN)
+
+
 def add_or_update_service(svc_key, svc_data):
-    config = read_config()
-    existing = config.get("services", {}).get(svc_key, {})
-    if existing and isinstance(existing, dict):
-        merged = dict(existing)
-        merged.update(svc_data)
-    else:
-        merged = svc_data
-    config.setdefault("services", {})[svc_key] = merged
-    write_config(config)
+    _acquire_config_lock()
+    try:
+        config = read_config()
+        existing = config.get("services", {}).get(svc_key, {})
+        if existing and isinstance(existing, dict):
+            merged = dict(existing)
+            merged.update(svc_data)
+        else:
+            merged = svc_data
+        config.setdefault("services", {})[svc_key] = merged
+        write_config(config)
+    finally:
+        _release_config_lock()
     return True
 
 
 def delete_service(svc_key):
-    config = read_config()
-    if svc_key in config.get("services", {}):
-        del config["services"][svc_key]
-        write_config(config)
-        return True
-    return False
+    _acquire_config_lock()
+    try:
+        config = read_config()
+        if svc_key in config.get("services", {}):
+            del config["services"][svc_key]
+            write_config(config)
+            return True
+        return False
+    finally:
+        _release_config_lock()
 
 
 # ===================================================================
 # Systemd generation
 # ===================================================================
+
+SAFE_FLAT_RE = re.compile(r'^[^\n\r/]+$')
+SAFE_PATH_RE = re.compile(r'^[^\n\r]+$')
+
+
+def _sanitize_flat_field(value, max_len=255):
+    s = str(value).strip()[:max_len]
+    if not s:
+        return s
+    if '..' in s or not SAFE_FLAT_RE.match(s):
+        raise ValueError(f"Invalid value: {value!r}")
+    return s
+
+
+def _sanitize_path_field(value, max_len=4096):
+    s = str(value).strip()[:max_len]
+    if not s:
+        return s
+    if '..' in s or not SAFE_PATH_RE.match(s):
+        raise ValueError(f"Invalid value: {value!r}")
+    return s
+
 
 SYSTEMD_TEMPLATE = """[Unit]
 Description={description}
@@ -412,10 +460,14 @@ WantedBy=multi-user.target
 
 
 def generate_systemd_unit(svc_key, svc_data):
+    svc_key = _sanitize_flat_field(svc_key)
     backend = svc_data.get("backend", "auto")
     defaults = BACKEND_DEFAULTS.get(backend, BACKEND_DEFAULTS["proxy"])
-    name = svc_data.get("name", svc_key)
-    user = svc_data.get("systemd_user", "admin_ia")
+    name = _sanitize_flat_field(svc_data.get("name", svc_key))
+    user = _sanitize_flat_field(svc_data.get("systemd_user", "admin_ia"))
+    ALLOWED_SYSTEMD_USERS = {"admin_ia", "root"}
+    if user not in ALLOWED_SYSTEMD_USERS:
+        raise ValueError(f"systemd_user '{user}' not allowed")
 
     # ExecStart: user-provided > template > empty
     exec_start = svc_data.get("exec_start", "").replace("\n", " \\\n    ")
@@ -437,8 +489,8 @@ def generate_systemd_unit(svc_key, svc_data):
     elif backend == "sglang":
         env_vars = "Environment=CUDA_HOME=/usr/local/cuda"
 
-    log_file = svc_data.get("log_file", f"/var/log/{svc_key}.log")
-    stop_timeout = svc_data.get("stop_timeout_seconds", defaults.get("stop_timeout_seconds", 15))
+    log_file = _sanitize_path_field(svc_data.get("log_file", f"/var/log/{svc_key}.log"))
+    stop_timeout = str(int(svc_data.get("stop_timeout_seconds", defaults.get("stop_timeout_seconds", 15))))
 
     return SYSTEMD_TEMPLATE.format(
         description=f"{name} — {backend}",
@@ -542,7 +594,7 @@ def create_config_api(config, is_admin_authenticated) -> Blueprint:
             'model_detect_pattern', 'process_patterns', 'process_exclude_patterns',
             'start_command', 'stop_command', 'exclusive_group', 'exec_start',
             'stop_timeout_seconds', 'journalctl_unit', 'journalctl_lines',
-            'vram_min_mib', 'process_exclude_patterns',
+            'vram_min_mib', 'systemd_user',
         }
         clean_data = {k: v for k, v in data.items() if k in ALLOWED_FIELDS and v is not None}
         ok = add_or_update_service(svc_key, clean_data)
@@ -569,7 +621,12 @@ def create_config_api(config, is_admin_authenticated) -> Blueprint:
             return jsonify({"error": "csrf_failed"}), 403
         data = request.get_json(force=True)
         svc_key = data.get("key", "untitled")
-        content = generate_systemd_unit(svc_key, data)
+        if not re.match(r'^[a-zA-Z0-9_-]+$', svc_key):
+            return jsonify({"error": "Invalid key format"}), 400
+        try:
+            content = generate_systemd_unit(svc_key, data)
+        except ValueError as e:
+            return jsonify({"error": str(e)}), 400
         return jsonify({"content": content, "key": svc_key})
 
     @bp.route("/api/admin/config/systemd/install", methods=["POST"])
@@ -580,7 +637,13 @@ def create_config_api(config, is_admin_authenticated) -> Blueprint:
             return jsonify({"error": "csrf_failed"}), 403
         data = request.get_json(force=True)
         svc_key = data.get("key", "untitled")
-        return jsonify(install_systemd_unit(svc_key, data))
+        if not re.match(r'^[a-zA-Z0-9_-]+$', svc_key):
+            return jsonify({"error": "Invalid key format"}), 400
+        try:
+            result = install_systemd_unit(svc_key, data)
+        except ValueError as e:
+            return jsonify({"error": str(e)}), 400
+        return jsonify(result)
 
     @bp.route("/api/admin/config/restart", methods=["POST"])
     def api_restart():

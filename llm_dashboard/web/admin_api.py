@@ -81,7 +81,7 @@ class AdminAPIRoutes:
                 logger.error("get_logs failed in api_admin_status: %s", exc)
             service_names = {}
             for k, v in config["services"].items():
-                service_names[k] = v["name"]
+                service_names[k] = v.get("name", k)
             return jsonify({
                 "services": services_status,
                 "vram": vram,
