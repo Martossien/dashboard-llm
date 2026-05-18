@@ -337,10 +337,10 @@
             const gpus = data.gpus || [];
             const dVram = vramDanger || 90, wVram = vramWarning || 70;
             const dPower = powerDanger || 90, wPower = powerWarning || 70;
-            gpus.forEach((gpu, idx) => {
+            gpus.forEach((gpu) => {
                 const vramPct = gpu.memory && gpu.memory.total > 0 ? (gpu.memory.used / gpu.memory.total) * 100 : 0;
                 const powerPct = gpu.power_limit > 0 ? (gpu.power / gpu.power_limit) * 100 : 0;
-                const card = document.querySelector('.gpu-card[data-gpu="' + idx + '"]');
+                const card = document.querySelector('.gpu-card[data-gpu="' + escAttr(String(gpu.id)) + '"]');
                 if (!card) return;
                 if (vramPct > dVram || powerPct > dPower) card.style.borderColor = '#da3633';
                 else if (vramPct > wVram || powerPct > wPower) card.style.borderColor = '#d29922';
@@ -429,5 +429,5 @@
         }
 
         function escAttr(s) {
-            return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            return (s || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         }

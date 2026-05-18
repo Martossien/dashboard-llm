@@ -11,6 +11,7 @@ import logging
 import os
 import re
 import subprocess
+import tempfile
 import yaml
 
 from flask import Blueprint, jsonify, request, session
@@ -456,9 +457,12 @@ def install_systemd_unit(svc_key, svc_data):
     unit_name = f"{svc_key}.service"
     unit_path = f"/etc/systemd/system/{unit_name}"
     try:
-        with open("/tmp/" + unit_name, "w") as f:
+        tmp_fd, tmp_path = tempfile.mkstemp(prefix=unit_name + ".", suffix=".tmp")
+        with os.fdopen(tmp_fd, 'w') as f:
             f.write(content)
-        subprocess.run(["sudo", "cp", "/tmp/" + unit_name, unit_path], capture_output=True, check=False)
+        os.chmod(tmp_path, 0o600)
+        subprocess.run(["sudo", "cp", tmp_path, unit_path], capture_output=True, check=False)
+        os.unlink(tmp_path)
         subprocess.run(["sudo", "systemctl", "daemon-reload"], capture_output=True, check=False)
         return {"success": True, "unit_name": unit_name, "content": content}
     except Exception as e:

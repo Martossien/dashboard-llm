@@ -209,13 +209,13 @@ class TestLogFilterPresets:
             assert noise_pat in patterns
 
     def test_resolve_filter_default_unknown_backend(self):
-        """Un backend inconnu doit avoir seulement les patterns llama generiques."""
-        from llm_dashboard.monitors.logs import _resolve_filter_patterns, LLAMA_NOISE_PATTERNS
+        """Un backend inconnu ne doit avoir aucun filtre (pas de patterns llama)."""
+        from llm_dashboard.monitors.logs import _resolve_filter_patterns
 
         svc_conf = {"backend": "unknown"}
         patterns = _resolve_filter_patterns(svc_conf)
 
-        assert patterns == list(LLAMA_NOISE_PATTERNS)
+        assert patterns == []
 
     def test_uvicorn_access_filter_matches(self):
         """Le preset uvicorn_access doit matcher les access logs vLLM."""

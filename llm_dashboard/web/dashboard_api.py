@@ -102,6 +102,7 @@ class DashboardAPIRoute:
 
             # Noms dynamiques des services (backward compat)
             LLAMA_BACKENDS = {"ik_llama.cpp", "llama.cpp"}
+            LLAMA_KEY_HINTS = {"ik_llama", "llama_", "llama.cpp"}
             ik_key = None
             llama_key = None
             vllm_key = None
@@ -110,34 +111,44 @@ class DashboardAPIRoute:
                     backend = v.get("backend", "")
                     if backend == "vllm":
                         vllm_key = k
-                    elif backend in ("llama.cpp",):
+                    elif backend == "llama.cpp":
                         llama_key = k
-                    elif backend in ("ik_llama.cpp",):
+                    elif backend == "ik_llama.cpp":
                         ik_key = k
-            if not ik_key:
-                ik_key = next((k for k, v in config.get("services", {}).items()
-                               if isinstance(v, dict) and v.get("role") == "llm"), "ik_llama_cpp")
-            if not llama_key:
-                llama_key = "llama_cpp"
+                    elif not backend:
+                        if "ik_llama" in k:
+                            ik_key = k
+                        elif "llama" in k or "llm" in k:
+                            llama_key = k
             if not vllm_key:
-                vllm_key = "vllm"
+                for k in config.get("services", {}):
+                    if "vllm" in k:
+                        vllm_key = k
+                        break
 
-            ik_name = _get_service_name(config, ik_key)
-            llama_name = _get_service_name(config, llama_key)
-            vllm_name = _get_service_name(config, vllm_key)
+            ik_name = _get_service_name(config, ik_key) if ik_key else None
+            llama_name = _get_service_name(config, llama_key) if llama_key else None
+            vllm_name = _get_service_name(config, vllm_key) if vllm_key else None
 
             # active_llama_name: strictly llama-family backends only
             active_llama_name = None
-            if active_on_8080 in (ik_key, llama_key):
-                active_llama_name = _get_service_name(config, active_on_8080)
+            if active_on_8080 and ik_key and active_on_8080 == ik_key:
+                active_llama_name = _get_service_name(config, ik_key)
+            elif active_on_8080 and llama_key and active_on_8080 == llama_key:
+                active_llama_name = _get_service_name(config, llama_key)
 
             # active_llm_service_name: whichever LLM service is active (any backend)
             active_llm_service_name = None
             if active_on_8080 and active_on_8080 in config.get("services", {}):
                 active_llm_service_name = _get_service_name(config, active_on_8080)
 
+            effective_llama_key = None
+            if active_on_8080 and ((ik_key and active_on_8080 == ik_key) or (llama_key and active_on_8080 == llama_key)):
+                effective_llama_key = active_on_8080
+            elif llama_key or ik_key:
+                effective_llama_key = llama_key or ik_key
             llama_health = services_payload.get('services', {}).get(
-                active_llama_name or llama_name) if active_llama_name else None
+                active_llama_name or (llama_name or ik_name or '')) if active_llama_name else None
             llama_latency = services_payload.get('llama_latency_seconds')
 
             try:
@@ -148,7 +159,8 @@ class DashboardAPIRoute:
                                  "eta_seconds": None, "avg_seconds": None}
 
             # Status du service actif avec latence/timings
-            if active_on_8080 in (ik_key, llama_key) or active_on_8080 is None:
+            _is_llama_active = active_on_8080 is not None and active_on_8080 in (ik_key, llama_key)
+            if _is_llama_active or active_on_8080 is None:
                 if active_llama_name:
                     llama_health = services_payload.get('services', {}).get(active_llama_name, 'DOWN')
                 llama_status = llama_health
@@ -168,9 +180,9 @@ class DashboardAPIRoute:
             try:
                 from llm_dashboard.monitors.timings import get_services_token_rates
                 service_token_rates = get_services_token_rates(config)
-                if active_on_8080 in (ik_key, llama_key) or active_on_8080 is None:
+                if _is_llama_active or active_on_8080 is None:
                     llama_pr, llama_gr = get_llama_timings()
-                elif active_on_8080 == vllm_key:
+                elif active_on_8080 == vllm_key and vllm_key:
                     vllm_pr, vllm_gr = get_vllm_timings()
 
                 for svc_key, rate in service_token_rates.items():

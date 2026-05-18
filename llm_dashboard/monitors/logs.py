@@ -63,19 +63,23 @@ ANSI_ESCAPE = re.compile(r'\x1b\[[0-9;?]*[a-zA-Z]|\x1b\].*?\x07')
 
 VALID_LOG_FILTER_VALUES = {"default", "verbose"}
 
+LLAMA_BACKENDS = {"ik_llama.cpp", "llama.cpp"}
+
 
 def _resolve_filter_patterns(svc_conf: dict) -> list:
     """Resout les patterns de filtrage pour un service.
 
     Si log_filter == "verbose", retourne [] (aucun filtrage).
     Si log_filter == "default" ou absent, combine les presets du backend
-    avec les patterns llama generiques.
+    avec les patterns llama generiques (uniquement pour les backends llama).
     """
     log_filter = svc_conf.get("log_filter", "default")
     if log_filter == "verbose":
         return []
     backend = svc_conf.get("backend", "")
-    patterns = list(LLAMA_NOISE_PATTERNS)
+    patterns = []
+    if backend in LLAMA_BACKENDS:
+        patterns.extend(LLAMA_NOISE_PATTERNS)
     for preset_name in BACKEND_LOG_FILTERS.get(backend, []):
         preset = LOG_FILTER_PRESETS.get(preset_name)
         if preset is not None:

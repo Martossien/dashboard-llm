@@ -179,14 +179,15 @@
             <div style="margin-top:10px; padding-left:4px;">
 
             <div class="form-group" id="group-start-command">
-                <label>Commande start <span class="info" title="Commande systeme pour demarrer le service. Ex: [&quot;systemctl&quot;, &quot;start&quot;, &quot;mon-service.service&quot;]">&#9432;</span></label>
+                <label>Commande start <span class="info" title="Commande systeme pour demarrer le service. Ex: systemctl start mon-service.service">&#9432;</span></label>
                 <input type="text" id="svc-start-command" placeholder='systemctl start mon-service.service'>
-                <div class="tooltip-text">Utilise pour le bouton Demarrer dans le dashboard.</div>
+                <div class="tooltip-text">Utilise pour le bouton Demarrer dans le dashboard. Les arguments separent par des espaces.</div>
             </div>
 
             <div class="form-group" id="group-stop-command">
                 <label>Commande stop <span class="info" title="Commande systeme pour arreter le service.">&#9432;</span></label>
                 <input type="text" id="svc-stop-command" placeholder='systemctl stop mon-service.service'>
+                <div class="tooltip-text">Les arguments separent par des espaces. Les arguments contenant des espaces doivent etre saisis directement dans config.yaml.</div>
             </div>
 
             <div class="form-group">

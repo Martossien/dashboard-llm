@@ -106,7 +106,7 @@ function renderAudit(d) {
     html += '<div class="audit-section"><h4>GPUs</h4>';
     (d.gpus || []).forEach(g => {
         const gb = (g.memory_total_mb / 1024).toFixed(1);
-        html += `<span class="audit-item found">🖥 GPU ${g.index}: ${g.name} (${gb} GiB)</span>`;
+        html += `<span class="audit-item found">🖥 GPU ${escAttr(String(g.index))}: ${escAttr(g.name)} (${escAttr(gb)} GiB)</span>`;
     });
     html += '</div>';
 
@@ -307,7 +307,7 @@ async function doAddService() {
         if (r.success) {
             toast('Service ' + data.key + ' sauve. Redemarrage en cours...');
             status.textContent = 'Sauve. Redemarrage...';
-            setTimeout(() => { status.textContent = ''; }, 5000);
+            setTimeout(() => { status.textContent = ''; switchTab('services'); }, 3000);
         } else {
             toast('Erreur: ' + (r.error || 'inconnue'), true);
             status.textContent = '';
