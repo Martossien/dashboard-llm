@@ -163,3 +163,149 @@ class TestReadJournalctLogs:
         result = read_journalctl_logs("ollama.service", max_lines=10)
         assert len(result) == 10
         assert result[-1] == "line 99"
+
+
+class TestLogFilterPresets:
+    """Tests pour le filtrage intelligent des logs par preset/backend."""
+
+    def test_resolve_filter_default_vllm(self):
+        """vllm avec log_filter=default doit filtrer les access logs uvicorn."""
+        from llm_dashboard.monitors.logs import _resolve_filter_patterns, LOG_FILTER_PRESETS
+
+        svc_conf = {"backend": "vllm", "log_filter": "default"}
+        patterns = _resolve_filter_patterns(svc_conf)
+
+        uvicorn_preset = LOG_FILTER_PRESETS["uvicorn_access"]
+        assert uvicorn_preset in patterns
+
+    def test_resolve_filter_default_proxy(self):
+        """proxy avec log_filter=default doit filtrer werkzeug access + 404 metrics."""
+        from llm_dashboard.monitors.logs import _resolve_filter_patterns, LOG_FILTER_PRESETS
+
+        svc_conf = {"backend": "proxy", "log_filter": "default"}
+        patterns = _resolve_filter_patterns(svc_conf)
+
+        assert LOG_FILTER_PRESETS["werkzeug_access"] in patterns
+        assert LOG_FILTER_PRESETS["werkzeug_metrics_404"] in patterns
+        assert LOG_FILTER_PRESETS["login_redirect"] in patterns
+
+    def test_resolve_filter_verbose_disables_all(self):
+        """log_filter=verbose doit desactiver tout filtrage."""
+        from llm_dashboard.monitors.logs import _resolve_filter_patterns
+
+        svc_conf = {"backend": "vllm", "log_filter": "verbose"}
+        patterns = _resolve_filter_patterns(svc_conf)
+
+        assert patterns == []
+
+    def test_resolve_filter_default_llama(self):
+        """llama.cpp avec log_filter=default doit avoir les patterns llama noise."""
+        from llm_dashboard.monitors.logs import _resolve_filter_patterns, LLAMA_NOISE_PATTERNS
+
+        svc_conf = {"backend": "llama.cpp"}
+        patterns = _resolve_filter_patterns(svc_conf)
+
+        for noise_pat in LLAMA_NOISE_PATTERNS:
+            assert noise_pat in patterns
+
+    def test_resolve_filter_default_unknown_backend(self):
+        """Un backend inconnu doit avoir seulement les patterns llama generiques."""
+        from llm_dashboard.monitors.logs import _resolve_filter_patterns, LLAMA_NOISE_PATTERNS
+
+        svc_conf = {"backend": "unknown"}
+        patterns = _resolve_filter_patterns(svc_conf)
+
+        assert patterns == list(LLAMA_NOISE_PATTERNS)
+
+    def test_uvicorn_access_filter_matches(self):
+        """Le preset uvicorn_access doit matcher les access logs vLLM."""
+        from llm_dashboard.monitors.logs import LOG_FILTER_PRESETS
+
+        pattern = LOG_FILTER_PRESETS["uvicorn_access"]
+        assert pattern.search('(APIServer pid=12345) INFO:     127.0.0.1:54342 - "GET /metrics HTTP/1.1" 200 OK')
+        assert pattern.search('(APIServer pid=12345) INFO:     127.0.0.1:54342 - "GET /v1/models HTTP/1.1" 200 OK')
+        assert pattern.search('(APIServer pid=12345) INFO:     127.0.0.1:54342 - "GET /health HTTP/1.1" 200 OK')
+
+    def test_uvicorn_access_filter_preserves_important(self):
+        """Le preset uvicorn_access ne doit pas matcher les vrais logs vLLM importants."""
+        from llm_dashboard.monitors.logs import LOG_FILTER_PRESETS
+
+        pattern = LOG_FILTER_PRESETS["uvicorn_access"]
+        assert not pattern.search('WARNING: Model loaded successfully')
+        assert not pattern.search('ERROR: Out of memory')
+
+    def test_werkzeug_access_filter_matches(self):
+        """Le preset werkzeug_access doit matcher les access logs werkzeug."""
+        from llm_dashboard.monitors.logs import LOG_FILTER_PRESETS
+
+        pattern = LOG_FILTER_PRESETS["werkzeug_access"]
+        assert pattern.search('2026-05-18 09:35:35 [INFO] - werkzeug:- 127.0.0.1 - - [18/May/2026 09:35:35] "GET /metrics HTTP/1.1" 200 -')
+        assert pattern.search('2026-05-18 09:35:36 [INFO] - werkzeug:- 127.0.0.1 - - [18/May/2026 09:35:36] "GET / HTTP/1.1" 302 -')
+        assert pattern.search('2026-05-18 09:35:36 [INFO] - werkzeug:- 127.0.0.1 - - [18/May/2026 09:35:36] "GET /login?next=/ HTTP/1.1" 200 -')
+
+    def test_werkzeug_metrics_404_filter_matches(self):
+        """Le preset werkzeug_metrics_404 doit matcher les 404 /metrics."""
+        from llm_dashboard.monitors.logs import LOG_FILTER_PRESETS
+
+        pattern = LOG_FILTER_PRESETS["werkzeug_metrics_404"]
+        assert pattern.search('[2026-05-18 09:35:34,266] [WARNING] [srt-editor] 404: /metrics')
+        assert pattern.search('[WARNING] [srt-editor] 404: /metrics')
+
+    def test_login_redirect_filter_matches(self):
+        """Le preset login_redirect doit matcher les redirects vers /login."""
+        from llm_dashboard.monitors.logs import LOG_FILTER_PRESETS
+
+        pattern = LOG_FILTER_PRESETS["login_redirect"]
+        assert pattern.search('2026-05-18 09:35:36 [INFO] - werkzeug:- 127.0.0.1 - - [18/May/2026 09:35:36] "GET /login?next=/ HTTP/1.1" 200 -')
+
+    def test_health_check_serving_filter_matches(self):
+        """Le preset health_check_serving doit matcher les health checks Flask/Gradio."""
+        from llm_dashboard.monitors.logs import LOG_FILTER_PRESETS
+
+        pattern = LOG_FILTER_PRESETS["health_check_serving"]
+        assert pattern.search('[2026-05-18 09:35:36,084] [DEBUG] [srt-editor] GET / — serving srt-editor-pro.html')
+        assert pattern.search('[DEBUG] [my-app] GET / — serving index.html')
+        assert not pattern.search('[INFO] [srt-editor] SRT Editor Pro server starting')
+        assert not pattern.search('[WARNING] [srt-editor] 404: /metrics')
+
+    def test_tail_log_lines_with_verbose_filter(self):
+        """tail_log_lines avec filter_patterns=[] ne doit rien filtrer."""
+        import tempfile
+        from monitor import tail_log_lines
+
+        noise_line = 'srv  stop: all tasks already finished, no need to cancel'
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".log", delete=False) as f:
+            f.write(noise_line + "\n")
+            f.write("Important log message\n")
+            filepath = f.name
+
+        try:
+            result = tail_log_lines(filepath, max_lines=50, block_size=1024,
+                                     filter_patterns=[])
+            assert len(result) == 2
+            assert noise_line in result[0]
+        finally:
+            os.unlink(filepath)
+
+    def test_tail_log_lines_with_custom_filter(self):
+        """tail_log_lines doit filtrer selon les patterns fournis."""
+        import re
+        import tempfile
+        from monitor import tail_log_lines
+
+        access_line = '(APIServer pid=999) INFO:     127.0.0.1:12345 - "GET /metrics HTTP/1.1" 200 OK'
+        important_line = "WARNING: Out of memory"
+        custom_patterns = [re.compile(r'^\(APIServer pid=\d+\) INFO:')]
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".log", delete=False) as f:
+            f.write(access_line + "\n")
+            f.write(important_line + "\n")
+            filepath = f.name
+
+        try:
+            result = tail_log_lines(filepath, max_lines=50, block_size=1024,
+                                     filter_patterns=custom_patterns)
+            assert len(result) == 1
+            assert "Out of memory" in result[0]
+        finally:
+            os.unlink(filepath)

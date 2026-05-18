@@ -2,6 +2,12 @@
 Log monitors — lecture de logs (tail, journalctl, filtrage).
 
 Extrait de monitor.py (Lot 5).
+
+Filtrage intelligent des logs:
+  - Chaque backend (vllm, ik_llama.cpp, proxy, etc.) a des presets de filtrage auto.
+  - L'utilisateur peut override par service avec log_filter: default | verbose.
+  - default = filtrage auto selon le backend (access logs, bruit interne).
+  - verbose = tout afficher, aucun filtrage.
 """
 
 import logging
@@ -13,7 +19,10 @@ from llm_dashboard.services.health import check_port_is_open
 
 logger = logging.getLogger("dashboard-llm.monitors.logs")
 
-# Patterns de bruit llama.cpp — lignes repetitives a filtrer
+# ============================================================================
+# Presets de filtrage — patterns compiles pour performance
+# ============================================================================
+
 LLAMA_NOISE_PATTERNS = [
     re.compile(r'^\s*srv\s+stop:\s+all tasks already finished'),
     re.compile(r'^\s*srv\s+update_slots:\s+all slots are idle\s*$'),
@@ -24,20 +33,72 @@ LLAMA_NOISE_PATTERNS = [
     re.compile(r'^\s*res\s+remove_waiti:\s+remove task\s'),
 ]
 
+LOG_FILTER_PRESETS = {
+    "uvicorn_access": re.compile(
+        r'^\(APIServer pid=\d+\) INFO:\s+\S+\s+- "GET /\S* HTTP'
+    ),
+    "werkzeug_access": re.compile(
+        r'\[INFO\]\s*-\s*werkzeug:\S*\s+\S+\s+-\s+-\s+\[.*\]\s+"(?:GET|POST|PUT|DELETE|HEAD|PATCH) /\S* HTTP'
+    ),
+    "werkzeug_metrics_404": re.compile(
+        r'\[WARNING\]\s*\[\S*\]\s*404:\s*/metrics'
+    ),
+    "login_redirect": re.compile(
+        r'\[INFO\]\s*-\s*werkzeug:\S*\s+\S+\s+-\s+-\s+\[.*\]\s+"GET /login\?next='
+    ),
+    "health_check_serving": re.compile(
+        r'\[DEBUG\]\s*\[\S*\]\s+GET\s+/\s+—\s+serving\s+'
+    ),
+}
+
+BACKEND_LOG_FILTERS = {
+    "vllm": ["uvicorn_access"],
+    "ik_llama.cpp": [],
+    "llama.cpp": [],
+    "proxy": ["werkzeug_access", "werkzeug_metrics_404", "login_redirect", "health_check_serving"],
+    "gradio": ["werkzeug_access", "werkzeug_metrics_404", "health_check_serving"],
+}
+
 ANSI_ESCAPE = re.compile(r'\x1b\[[0-9;?]*[a-zA-Z]|\x1b\].*?\x07')
 
+VALID_LOG_FILTER_VALUES = {"default", "verbose"}
 
-def tail_log_lines(log_file: str, max_lines: int, block_size: int) -> list[str]:
+
+def _resolve_filter_patterns(svc_conf: dict) -> list:
+    """Resout les patterns de filtrage pour un service.
+
+    Si log_filter == "verbose", retourne [] (aucun filtrage).
+    Si log_filter == "default" ou absent, combine les presets du backend
+    avec les patterns llama generiques.
+    """
+    log_filter = svc_conf.get("log_filter", "default")
+    if log_filter == "verbose":
+        return []
+    backend = svc_conf.get("backend", "")
+    patterns = list(LLAMA_NOISE_PATTERNS)
+    for preset_name in BACKEND_LOG_FILTERS.get(backend, []):
+        preset = LOG_FILTER_PRESETS.get(preset_name)
+        if preset is not None:
+            patterns.append(preset)
+    return patterns
+
+
+def tail_log_lines(log_file: str, max_lines: int, block_size: int,
+                    filter_patterns: list | None = None) -> list[str]:
     """Lit les dernieres lignes d'un fichier de log, avec filtrage ANSI et bruit.
 
     Args:
         log_file: chemin du fichier de log
         max_lines: nombre maximum de lignes a retourner
         block_size: taille des blocs de lecture en bytes
+        filter_patterns: liste de regex compilees a filtrer, ou None pour
+                         le comportement par defaut (LLAMA_NOISE_PATTERNS)
 
     Returns:
         list[str]: lignes de log nettoyees, les plus recentes en dernier
     """
+    if filter_patterns is None:
+        filter_patterns = LLAMA_NOISE_PATTERNS
     raw_max = max_lines * 200
     with open(log_file, 'rb') as f:
         f.seek(0, os.SEEK_END)
@@ -57,7 +118,7 @@ def tail_log_lines(log_file: str, max_lines: int, block_size: int) -> list[str]:
         if not line:
             continue
         clean_line = ANSI_ESCAPE.sub('', line)
-        if any(pat.search(clean_line) for pat in LLAMA_NOISE_PATTERNS):
+        if any(pat.search(clean_line) for pat in filter_patterns):
             continue
         lines.appendleft(clean_line)
         if len(lines) >= max_lines:
@@ -65,23 +126,34 @@ def tail_log_lines(log_file: str, max_lines: int, block_size: int) -> list[str]:
     return list(lines)
 
 
-def read_journalctl_logs(unit: str, max_lines: int) -> list[str]:
+def read_journalctl_logs(unit: str, max_lines: int,
+                         filter_patterns: list | None = None) -> list[str]:
     """Lit les logs d'un service systemd via journalctl (CommandRunner).
 
     Args:
         unit: nom du service systemd (ex: "ollama")
         max_lines: nombre maximum de lignes
+        filter_patterns: liste de regex compilees a filtrer, ou None pour
+                        le comportement par defaut (LLAMA_NOISE_PATTERNS)
 
     Returns:
         list[str]: lignes de log, ou liste vide si erreur
     """
+    if filter_patterns is None:
+        filter_patterns = LLAMA_NOISE_PATTERNS
     from llm_dashboard.services.commands import CommandRunner
     runner = CommandRunner()
     try:
         result = runner.journalctl_unit(unit, lines=max_lines, timeout=5)
         if result.success and result.stdout.strip():
             lines = result.stdout.strip().splitlines()
-            return lines[-max_lines:]
+            filtered = []
+            for line in lines:
+                clean = ANSI_ESCAPE.sub('', line)
+                if any(pat.search(clean) for pat in filter_patterns):
+                    continue
+                filtered.append(line)
+            return filtered[-max_lines:]
         return []
     except ValueError as e:
         logger.debug("Failed to read journalctl logs for %s: %s", unit, e)
@@ -133,11 +205,13 @@ def get_logs(config: dict, command_runner) -> dict:
     log_block_bytes = config["monitoring"]["log_block_bytes"]
     service_logs = {}
     for svc_key, svc_conf in config["services"].items():
+        filter_patterns = _resolve_filter_patterns(svc_conf)
         log_type = svc_conf.get("log_type", "file")
         if log_type == "journalctl":
             unit = svc_conf.get("journalctl_unit", svc_key)
             jctl_lines = svc_conf.get("journalctl_lines", max_lines)
-            lines = read_journalctl_logs(unit, jctl_lines)
+            lines = read_journalctl_logs(unit, jctl_lines,
+                                         filter_patterns=filter_patterns)
             if not lines:
                 lines = ["(no logs from journalctl unit {})".format(unit)]
             service_logs[svc_key] = lines
@@ -151,7 +225,8 @@ def get_logs(config: dict, command_runner) -> dict:
                     service_logs[svc_key] = ["Service is not running or has not produced any logs yet."]
                 else:
                     try:
-                        lines = tail_log_lines(log_file, max_lines, log_block_bytes)
+                        lines = tail_log_lines(log_file, max_lines, log_block_bytes,
+                                               filter_patterns=filter_patterns)
                         if not lines:
                             service_logs[svc_key] = ["(log file has no meaningful entries)"]
                         else:

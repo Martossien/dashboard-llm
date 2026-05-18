@@ -40,6 +40,7 @@ DEFAULT_CONFIG = {
     "gpu": {
         "enable": True,
     },
+    "log_filter_presets": {},
     "model_detection": {
         "cache_seconds": 5,
         "cache_grace_seconds": 30,
@@ -247,6 +248,12 @@ def _validate_service(config: dict, svc_key: str, svc_conf: dict) -> None:
     if jc_lines is not None:
         if not isinstance(jc_lines, int) or jc_lines < 1:
             svc_conf["journalctl_lines"] = 50
+
+    log_filter = svc_conf.get("log_filter")
+    if log_filter is not None:
+        if not isinstance(log_filter, str) or log_filter not in ("default", "verbose"):
+            logger.warning("services.%s.log_filter must be 'default' or 'verbose', using 'default'", svc_key)
+            svc_conf["log_filter"] = "default"
 
 
 def _validate_lists(config: dict) -> None:
