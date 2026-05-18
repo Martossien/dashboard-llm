@@ -23,12 +23,13 @@
             </p>
             <h3>Informations affichees</h3>
             <ul>
+                <li><span class="highlight">Service LLM actif</span> : le nom du service LLM courant (distinct du modele charge)</li>
                 <li><span class="highlight">Modele charge</span> : le nom du modele LLM actif (detecte via /v1/models)</li>
                 <li><span class="highlight">CPU Load / RAM</span> : utilisation systeme</li>
                 <li><span class="highlight">Services Status</span> : statut de chaque service (vert = UP, rouge = DOWN, jaune = SLOW, gris = LOADING)</li>
                 <li><span class="highlight">Token rates</span> : prompt et generation tokens par seconde (via /metrics)</li>
                 <li><span class="highlight">GPU Cards</span> : temperature, VRAM, consommation electrique, SM/mem clocks, throttling</li>
-                <li><span class="highlight">Logs</span> : derniers logs de chaque service, onglets separes</li>
+                <li><span class="highlight">Logs</span> : derniers logs de chaque service, onglets separes. Filtrage intelligent automatique selon le backend (access logs, health checks repetitifs, lignes inutiles masquees par defaut). Mode verbose disponible dans la configuration.</li>
             </ul>
         </div>
 
@@ -73,16 +74,42 @@
             </p>
             <h3>Onglet Ajouter</h3>
             <p>
-                Formulaire complet pour definir un service :
-                cle, role (LLM Engine / Projet / Auxiliaire), backend, nom, port, URL,
-                systemd unit, modele, log, groupe exclusif.
+                Formulaire complet pour definir un service. Les champs principaux :
+            </p>
+            <ul>
+                <li><span class="highlight">Cle</span> : identifiant unique du service (ex: <code>vllm_qwen27b</code>)</li>
+                <li><span class="highlight">Role</span> : LLM Engine, Projet ou Auxiliaire</li>
+                <li><span class="highlight">Backend</span> : logiciel chargeur (vLLM, llama.cpp, ik_llama.cpp, SGLang, Ollama, LM Studio, Proxy, Gradio)</li>
+                <li><span class="highlight">Nom affiche</span>, <span class="highlight">Port</span>, <span class="highlight">Base URL</span></li>
+                <li><span class="highlight">Health endpoint</span> : chemin du health check (ex: <code>/health</code>, <code>/</code>)</li>
+                <li><span class="highlight">Models endpoint</span> : chemin pour detecter le modele (ex: <code>/v1/models</code>). Laisser vide si le service n'expose pas de modeles.</li>
+                <li><span class="highlight">Timeout</span> : delai en secondes pour les health checks</li>
+                <li><span class="highlight">Systemd unit</span>, <span class="highlight">Chemin du modele</span>, <span class="highlight">Log file</span></li>
+                <li><span class="highlight">Filtre de logs</span> : <code>default</code> = filtre auto selon le backend (recommande), <code>verbose</code> = tout afficher</li>
+                <li><span class="highlight">Groupe exclusif</span> : services partageant un port (ex: <code>llm_8080</code>)</li>
+            </ul>
+            <p>
                 La <strong>commande de lancement</strong> (ExecStart) est editable librement —
                 un template par defaut est fourni par backend, modifiez-le selon vos besoins.
-                Boutons : apercu YAML, generer .service, installer le service, sauvegarder.
+            </p>
+            <p>
+                Section <strong>Parametres avances</strong> (collapsee par defaut) :
+                commande start/stop, startup time, pattern detection modele,
+                process patterns, process exclude patterns.
+            </p>
+            <p>
+                Boutons : <strong>Apercu YAML</strong> (affiche le YAML avant de sauvegarder),
+                <strong>Sauvegarder</strong> (ecrit dans config.yaml + redemarrage),
+                <strong>Generer .service</strong>, <strong>Installer le service</strong>.
+            </p>
+            <p>
+                Important : lors de l'edition d'un service existant, les champs non modifies sont
+                conserves (merge, pas remplacement). La cle du service est en lecture seule.
             </p>
             <h3>Onglet Services</h3>
             <p>
-                Tableau des services definis. Edition et suppression.
+                Tableau des services definis avec leur role, backend, port, filtre, statut health et systemd unit.
+                Boutons d'edition et de suppression.
                 Lors de l'edition, le vrai ExecStart du fichier .service est charge (pas le template).
             </p>
         </div>
