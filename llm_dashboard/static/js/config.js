@@ -18,7 +18,16 @@ function switchTab(name) {
     document.querySelectorAll('.config-panel').forEach(el => el.classList.remove('active'));
     document.querySelector(`.config-tab[data-tab="${name}"]`).classList.add('active');
     document.getElementById('panel-' + name).classList.add('active');
-    if (name === 'services') loadServices();
+    if (name === 'add') {
+        const keyInput = document.getElementById('svc-key');
+        if (!keyInput.value) {
+            keyInput.readOnly = false;
+            keyInput.style.opacity = '1';
+            document.getElementById('svc-key-hint').textContent = 'Ex: vllm_qwen27b, llama_heretic, claude_code_proxy';
+        }
+    } else if (name === 'services') {
+        loadServices();
+    }
 }
 
 // ===================== AUDIT =====================
@@ -137,6 +146,29 @@ function escAttr(s) {
 
 // ===================== ADD SERVICE =====================
 
+const LOG_FILTER_DESCRIPTIONS = {
+    'vllm': 'Filtre les access logs uvicorn (GET /health, /metrics, /v1/models).',
+    'ik_llama.cpp': 'Filtre les lignes repetitives llama.cpp (srv stop, slots idle, etc.).',
+    'llama.cpp': 'Filtre les lignes repetitives llama.cpp (srv stop, slots idle, etc.).',
+    'proxy': 'Filtre les access logs werkzeug, les 404 /metrics, les redirects /login et les health checks repetitifs.',
+    'ollama': 'Aucun filtre supplementaire (journalctl).',
+    'sglang': 'Aucun filtre supplementaire.',
+    'lmstudio': 'Aucun filtre supplementaire.',
+    'gradio': 'Filtre les access logs, les 404 /metrics et les health checks repetitifs.',
+};
+
+function onLogFilterChange() {
+    const sel = document.getElementById('svc-log-filter');
+    const info = document.getElementById('log-filter-info');
+    if (sel.value === 'verbose') {
+        info.textContent = 'Mode verbose : aucune ligne de log ne sera filtree. Utile pour le debug.';
+    } else {
+        const backend = document.getElementById('svc-backend').value;
+        const desc = LOG_FILTER_DESCRIPTIONS[backend] || 'Filtre les lignes de log inutiles selon le backend.';
+        info.textContent = desc;
+    }
+}
+
 function onBackendChange() {
     const backend = document.getElementById('svc-backend').value;
     const descs = {
@@ -151,6 +183,8 @@ function onBackendChange() {
     };
     document.getElementById('backend-info').textContent = descs[backend] || '';
 
+    onLogFilterChange();
+
     fetch('/api/admin/config/backend-defaults?backend=' + backend, {credentials:'same-origin'})
     .then(r => r.json())
     .then(defs => {
@@ -158,9 +192,7 @@ function onBackendChange() {
         if (defs.exec_start_template && !execStart.value) {
             execStart.value = defs.exec_start_template;
         }
-        // Auto-fill health endpoint if available
         if (defs.health_endpoint && !document.getElementById('svc-url').value) {
-            // Don't overwrite URL, just note
         }
     }).catch(() => {});
 }
@@ -171,63 +203,79 @@ function suggestUnit() {
     document.getElementById('svc-url').value = 'http://127.0.0.1:' + (document.getElementById('svc-port').value || '8000');
 }
 
-async function doAddService() {
-    const key = document.getElementById('svc-key').value.trim();
-    if (!key) { toast('Cle de service requise', true); return; }
-    const port = parseInt(document.getElementById('svc-port').value) || null;
-    const portFromUrl = (document.getElementById('svc-url').value.match(/:(\d+)/) || [])[1];
+function _collectServiceData() {
+    const startCmd = document.getElementById('svc-start-command').value.trim();
+    const stopCmd = document.getElementById('svc-stop-command').value.trim();
+    const procPatterns = document.getElementById('svc-process-patterns').value.trim();
+    const procExclude = document.getElementById('svc-process-exclude').value.trim();
     const data = {
-        key: key,
-        name: document.getElementById('svc-name').value || key,
+        key: document.getElementById('svc-key').value.trim(),
+        name: document.getElementById('svc-name').value || document.getElementById('svc-key').value.trim(),
         backend: document.getElementById('svc-backend').value,
         role: document.getElementById('svc-role').value,
-        exclusive_group: document.getElementById('svc-group').value || null,
-        port: port || (portFromUrl ? parseInt(portFromUrl) : null),
-        base_url: document.getElementById('svc-url').value || null,
-        health_endpoint: '/health',
-        models_endpoint: document.getElementById('svc-role').value === 'llm' ? '/v1/models' : null,
-        timeout_seconds: 2,
-        log_file: document.getElementById('svc-logfile').value || null,
+        base_url: document.getElementById('svc-url').value,
+        port: parseInt(document.getElementById('svc-port').value) || null,
+        health_endpoint: document.getElementById('svc-health-endpoint').value || null,
+        models_endpoint: document.getElementById('svc-models-endpoint').value || null,
+        timeout_seconds: parseInt(document.getElementById('svc-timeout').value) || null,
+        systemd_unit: document.getElementById('svc-unit').value,
         model_path: document.getElementById('svc-model').value || null,
-        systemd_unit: document.getElementById('svc-unit').value || null,
+        log_file: document.getElementById('svc-logfile').value || null,
+        log_filter: document.getElementById('svc-log-filter').value || 'default',
+        startup_time_seconds: parseInt(document.getElementById('svc-startup-time').value) || null,
+        model_detect_pattern: document.getElementById('svc-model-detect').value || null,
+        process_patterns: procPatterns ? procPatterns.split(',').map(s => s.trim()).filter(Boolean) : null,
+        process_exclude_patterns: procExclude ? procExclude.split(',').map(s => s.trim()).filter(Boolean) : null,
+        start_command: startCmd ? startCmd.split(/\s+/) : null,
+        stop_command: stopCmd ? stopCmd.split(/\s+/) : null,
+        exclusive_group: document.getElementById('svc-group').value || null,
     };
+    return data;
+}
 
+function previewYaml() {
+    const data = _collectServiceData();
+    if (!data.key) { toast('Cle de service requise', true); return; }
+    const y = [];
+    y.push(data.key + ':');
+    for (const [k, v] of Object.entries(data)) {
+        if (k !== 'key' && v !== null && v !== '' && !(Array.isArray(v) && v.length === 0)) {
+            if (Array.isArray(v)) {
+                y.push('  ' + k + ': [' + v.map(s => '"' + s + '"').join(', ') + ']');
+            } else {
+                y.push('  ' + k + ': ' + (typeof v === 'string' ? '"' + v + '"' : v));
+            }
+        }
+    }
+    document.getElementById('yaml-preview').textContent = y.join('\n');
+    document.getElementById('yaml-preview').style.display = 'block';
+}
+
+async function doAddService() {
+    const data = _collectServiceData();
+    if (!data.key) { toast('Cle de service requise', true); return; }
+    const status = document.getElementById('add-status');
+    status.textContent = 'Sauvegarde...';
     try {
         const resp = await fetch('/api/admin/config/service', {
-            method: 'POST', credentials: 'same-origin',
+            method: 'POST',
+            credentials: 'same-origin',
             headers: { 'Content-Type': 'application/json', ...getCsrfHeaders() },
             body: JSON.stringify(data)
         });
         const r = await resp.json();
         if (r.success) {
-            document.getElementById('add-status').textContent = `✅ ${key} sauvegarde. Redemarrage...`;
-            setTimeout(() => { document.getElementById('add-status').textContent = '✅ Pret'; }, 3000);
+            toast('Service ' + data.key + ' sauve. Redemarrage en cours...');
+            status.textContent = 'Sauve. Redemarrage...';
+            setTimeout(() => { status.textContent = ''; }, 5000);
         } else {
             toast('Erreur: ' + (r.error || 'inconnue'), true);
+            status.textContent = '';
         }
-    } catch (e) { toast('Erreur reseau: ' + e.message, true); }
-}
-
-function previewYaml() {
-    const key = document.getElementById('svc-key').value || 'mon_service';
-    const data = {
-        key: key,
-        name: document.getElementById('svc-name').value || key,
-        backend: document.getElementById('svc-backend').value,
-        role: document.getElementById('svc-role').value,
-        base_url: document.getElementById('svc-url').value,
-        port: parseInt(document.getElementById('svc-port').value) || null,
-        systemd_unit: document.getElementById('svc-unit').value,
-    };
-    const y = [];
-    y.push(key + ':');
-    for (const [k, v] of Object.entries(data)) {
-        if (k !== 'key' && v !== null && v !== '') {
-            y.push('  ' + k + ': ' + (typeof v === 'string' ? '"' + v + '"' : v));
-        }
+    } catch (e) {
+        toast('Erreur: ' + e.message, true);
+        status.textContent = '';
     }
-    document.getElementById('yaml-preview').textContent = y.join('\n');
-    document.getElementById('yaml-preview').style.display = 'block';
 }
 
 async function doGenerateSystemd() {
@@ -294,13 +342,14 @@ async function loadServices() {
             return;
         }
 
-        let html = '<table class="svc-table"><tr><th>Nom</th><th>Role</th><th>Backend</th><th>Port</th><th>Health</th><th>Systemd</th><th></th></tr>';
+        let html = '<table class="svc-table"><tr><th>Nom</th><th>Role</th><th>Backend</th><th>Port</th><th>Filtre</th><th>Health</th><th>Systemd</th><th></th></tr>';
         for (const k of keys) {
             const svc = services[k] || {};
             const name = svc.name || k;
             const role = svc.role || 'auxiliary';
             const backend = svc.backend || 'auto';
             const port = svc.port || '-';
+            const logFilter = svc.log_filter || 'default';
             const unit = svc.systemd_unit || '-';
             const h = health[name] || '?';
             const hCls = h === 'UP' ? 'health-up' : 'health-down';
@@ -310,6 +359,7 @@ async function loadServices() {
                 <td><span class="${roleBadge}">${role}</span></td>
                 <td>${backend}</td>
                 <td>${port}</td>
+                <td style="font-size:11px;color:#8b949e;">${logFilter}</td>
                 <td class="${hCls}">${h}</td>
                 <td>${unit}</td>
                 <td>
@@ -349,15 +399,32 @@ function editService(key) {
         const svc = svcs[key];
         if (!svc) return;
         switchTab('add');
-        document.getElementById('svc-key').value = key;
+        const keyInput = document.getElementById('svc-key');
+        keyInput.value = key;
+        keyInput.readOnly = true;
+        keyInput.style.opacity = '0.6';
+        document.getElementById('svc-key-hint').textContent = 'Modification de ' + key + ' — les champs non modifiés sont conserves.';
         document.getElementById('svc-name').value = svc.name || key;
         document.getElementById('svc-role').value = svc.role || 'llm';
         document.getElementById('svc-backend').value = svc.backend || 'auto';
         document.getElementById('svc-port').value = svc.port || '';
         document.getElementById('svc-url').value = svc.base_url || '';
+        document.getElementById('svc-health-endpoint').value = svc.health_endpoint || '';
+        document.getElementById('svc-models-endpoint').value = svc.models_endpoint || '';
+        document.getElementById('svc-timeout').value = svc.timeout_seconds || '';
         document.getElementById('svc-unit').value = svc.systemd_unit || '';
         document.getElementById('svc-model').value = svc.model_path || '';
         document.getElementById('svc-logfile').value = svc.log_file || '';
+        document.getElementById('svc-log-filter').value = svc.log_filter || 'default';
+        document.getElementById('svc-startup-time').value = svc.startup_time_seconds || '';
+        document.getElementById('svc-model-detect').value = svc.model_detect_pattern || '';
+        document.getElementById('svc-process-patterns').value = (svc.process_patterns || []).join(', ');
+        document.getElementById('svc-process-exclude').value = (svc.process_exclude_patterns || []).join(', ');
+        // Parse start_command/stop_command from array to string
+        const startCmd = svc.start_command || [];
+        const stopCmd = svc.stop_command || [];
+        document.getElementById('svc-start-command').value = startCmd.join(' ');
+        document.getElementById('svc-stop-command').value = stopCmd.join(' ');
         document.getElementById('svc-group').value = svc.exclusive_group || '';
         // Try to load actual ExecStart from existing .service file
         const unit = svc.systemd_unit;

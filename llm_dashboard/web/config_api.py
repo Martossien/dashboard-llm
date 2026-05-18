@@ -107,6 +107,7 @@ BACKEND_DEFAULTS = {
     },
     "proxy": {
         "health_endpoint": "/health",
+        "models_endpoint": None,
         "timeout_seconds": 2,
         "startup_time_seconds": 10,
         "stop_timeout_seconds": 10,
@@ -114,6 +115,7 @@ BACKEND_DEFAULTS = {
     },
     "gradio": {
         "health_endpoint": "/",
+        "models_endpoint": None,
         "timeout_seconds": 2,
         "startup_time_seconds": 30,
         "stop_timeout_seconds": 10,
@@ -360,7 +362,13 @@ def get_services():
 
 def add_or_update_service(svc_key, svc_data):
     config = read_config()
-    config.setdefault("services", {})[svc_key] = svc_data
+    existing = config.get("services", {}).get(svc_key, {})
+    if existing and isinstance(existing, dict):
+        merged = dict(existing)
+        merged.update(svc_data)
+    else:
+        merged = svc_data
+    config.setdefault("services", {})[svc_key] = merged
     write_config(config)
     return True
 
@@ -481,7 +489,20 @@ def create_config_api(config, is_admin_authenticated) -> Blueprint:
         if not is_admin_authenticated():
             return jsonify({"error": "Unauthorized"}), 401
         backend = request.args.get("backend", "auto")
-        return jsonify(BACKEND_DEFAULTS.get(backend, BACKEND_DEFAULTS["proxy"]))
+        defaults = BACKEND_DEFAULTS.get(backend, BACKEND_DEFAULTS["proxy"])
+        LOG_FILTER_INFO = {
+            "vllm": "Filtre les access logs uvicorn (GET /health, /metrics, /v1/models).",
+            "ik_llama.cpp": "Filtre les lignes repetitives llama.cpp (srv stop, slots idle, etc.).",
+            "llama.cpp": "Filtre les lignes repetitives llama.cpp (srv stop, slots idle, etc.).",
+            "proxy": "Filtre les access logs werkzeug, les 404 /metrics, les redirects /login et les health checks repetitifs.",
+            "ollama": "Aucun filtre supplementaire (journalctl).",
+            "sglang": "Aucun filtre supplementaire.",
+            "lmstudio": "Aucun filtre supplementaire.",
+            "gradio": "Filtre les access logs, les 404 /metrics et les health checks repetitifs.",
+        }
+        result = dict(defaults)
+        result["log_filter_info"] = LOG_FILTER_INFO.get(backend, "Filtre les lignes de log inutiles selon le backend.")
+        return jsonify(result)
 
     @bp.route("/api/admin/config/service", methods=["POST"])
     def api_add_service():

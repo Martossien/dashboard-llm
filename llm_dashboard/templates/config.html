@@ -91,7 +91,7 @@
         <div class="form-group">
             <label>Cle du service <span class="info" title="Identifiant unique. Ex: vllm_qwen27b">&#9432;</span></label>
             <input type="text" id="svc-key" placeholder="vllm_qwen27b" required>
-            <div class="tooltip-text">Ex: vllm_qwen27b, llama_heretic, claude_code_proxy</div>
+            <div class="tooltip-text" id="svc-key-hint">Ex: vllm_qwen27b, llama_heretic, claude_code_proxy</div>
         </div>
 
         <div class="form-group">
@@ -126,6 +126,23 @@
         </div>
 
         <div class="form-group">
+            <label>Health endpoint <span class="info" title="Endpoint de health check. Ex: /health, /, /healthz">&#9432;</span></label>
+            <input type="text" id="svc-health-endpoint" placeholder="/health">
+            <div class="tooltip-text">Laisser vide pour utiliser /health par defaut.</div>
+        </div>
+
+        <div class="form-group" id="group-models-endpoint">
+            <label>Models endpoint <span class="info" title="Endpoint pour detecter le modele (LLM uniquement). Ex: /v1/models">&#9432;</span></label>
+            <input type="text" id="svc-models-endpoint" placeholder="/v1/models">
+            <div class="tooltip-text">Uniquement pour les LLM. Laisser vide si le service n'expose pas de modeles.</div>
+        </div>
+
+        <div class="form-group">
+            <label>Timeout (s) <span class="info" title="Timeout en secondes pour les health checks.">&#9432;</span></label>
+            <input type="number" id="svc-timeout" placeholder="2" min="1" max="30" style="max-width:120px;">
+        </div>
+
+        <div class="form-group">
             <label>Systemd unit <span class="info" title="Nom du service systemd pour start/stop. Ex: vllm-qwen27b.service">&#9432;</span></label>
             <input type="text" id="svc-unit" placeholder="vllm-qwen27b.service">
             <div class="suggestions"><span class="suggestion" onclick="suggestUnit()">Generer nom automatique</span></div>
@@ -147,6 +164,54 @@
             <label>Log file <span class="info" title="Chemin du fichier de log du service.">&#9432;</span></label>
             <input type="text" id="svc-logfile" placeholder="/var/log/mon_service.log">
         </div>
+
+        <div class="form-group">
+            <label>Filtre de logs <span class="info" title="default = filtre auto les access logs internes ( recommande ). verbose = afficher tout.">&#9432;</span></label>
+            <select id="svc-log-filter" onchange="onLogFilterChange()">
+                <option value="default">default — filtre auto</option>
+                <option value="verbose">verbose — tout afficher</option>
+            </select>
+            <div class="tooltip-text" id="log-filter-info">Filtre les lignes de log inutiles (access logs, polling interne) selon le backend.</div>
+        </div>
+
+        <details style="margin-top:8px; margin-bottom:12px;">
+            <summary style="color:#58a6ff; cursor:pointer; font-size:12px; font-weight:bold;">▸ Parametres avances</summary>
+            <div style="margin-top:10px; padding-left:4px;">
+
+            <div class="form-group" id="group-start-command">
+                <label>Commande start <span class="info" title="Commande systeme pour demarrer le service. Ex: [&quot;systemctl&quot;, &quot;start&quot;, &quot;mon-service.service&quot;]">&#9432;</span></label>
+                <input type="text" id="svc-start-command" placeholder='systemctl start mon-service.service'>
+                <div class="tooltip-text">Utilise pour le bouton Demarrer dans le dashboard.</div>
+            </div>
+
+            <div class="form-group" id="group-stop-command">
+                <label>Commande stop <span class="info" title="Commande systeme pour arreter le service.">&#9432;</span></label>
+                <input type="text" id="svc-stop-command" placeholder='systemctl stop mon-service.service'>
+            </div>
+
+            <div class="form-group">
+                <label>Startup time (s) <span class="info" title="Temps de demarrage en secondes avant le health check.">&#9432;</span></label>
+                <input type="number" id="svc-startup-time" placeholder="10" min="1" max="900" style="max-width:120px;">
+            </div>
+
+            <div class="form-group" id="group-model-detect">
+                <label>Pattern detection modele <span class="info" title="Regex utilisee pour identifier le modele charge. Ex: (?i)qwen36-27b">&#9432;</span></label>
+                <input type="text" id="svc-model-detect" placeholder="(?i)mon-modele">
+                <div class="tooltip-text">Uniquement pour les LLM. Detecte le modele charge dans /v1/models.</div>
+            </div>
+
+            <div class="form-group">
+                <label>Process patterns <span class="info" title="Mots-cles pour detecter le processus. Separes par des virgules.">&#9432;</span></label>
+                <input type="text" id="svc-process-patterns" placeholder="vllm, mon_processus">
+            </div>
+
+            <div class="form-group">
+                <label>Process exclude <span class="info" title="Mots-cles a exclure de la detection. Separes par des virgules.">&#9432;</span></label>
+                <input type="text" id="svc-process-exclude" placeholder="ik_llama, autre">
+            </div>
+
+            </div>
+        </details>
 
         <div class="form-group" id="group-exclusive">
             <label>Groupe exclusif <span class="info" title="Services partageant un port. Laisser vide si independant.">&#9432;</span></label>
