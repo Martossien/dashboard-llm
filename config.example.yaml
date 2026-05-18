@@ -27,12 +27,15 @@ services:
     log_type: "journalctl"
     journalctl_unit: "ollama"
     systemd_unit: "ollama.service"
+    start_command: ["systemctl", "start", "ollama.service"]
+    stop_command: ["systemctl", "stop", "ollama.service"]
     process_patterns: ["ollama"]
     startup_time_seconds: 5
+    log_filter: default
 
   # LLM Engine — dedicated port, systemd-managed
-  vllm_qwen27b:
-    name: "Qwen3.6-27B (vLLM BF16)"
+  vllm_my_model:
+    name: "MyModel FP8 (vLLM)"
     backend: "vllm"
     role: "llm"
     exclusive_group: ~          # dedicated port — not shared
@@ -40,27 +43,21 @@ services:
     health_endpoint: "/health"
     models_endpoint: "/v1/models"
     timeout_seconds: 2
-    log_file: "/var/log/vllm_qwen36_27b.log"
-    systemd_unit: "vllm-qwen27b.service"
-    # Metadata (displayed in UI)
-    model_family: "Qwen3.6"
-    model_size_b: 27
-    model_quant: "BF16"
-    model_quant_bits: 16.0
-    context_size: 131072
-    has_thinking: true
-    has_tools: true
-    has_vision: true
+    log_file: "/var/log/vllm_my_model.log"
+    systemd_unit: "vllm-my-model.service"
+    start_command: ["systemctl", "start", "vllm-my-model.service"]
+    stop_command: ["systemctl", "stop", "vllm-my-model.service"]
     # Detection
-    model_detect_pattern: "(?i)qwen36-27b|qwen3\\.6-27b"
+    model_detect_pattern: "(?i)mymodel"
     process_patterns: ["vllm serve", "VLLM::EngineCore", "VLLM::Worker_TP"]
     process_exclude_patterns: []
     startup_time_seconds: 900
     stop_timeout_seconds: 60
+    log_filter: default
 
-  # LLM Engine — shared port 8030 with other llama/ik_llama instances
-  llama_qwen27b_heretic:
-    name: "Qwen3.6-27B-heretic Q8_0 (llama.cpp)"
+  # LLM Engine — shared port with other llama/ik_llama instances
+  llama_my_model:
+    name: "MyModel Q8_0 (llama.cpp)"
     backend: "llama.cpp"
     role: "llm"
     exclusive_group: "llm_8030"       # shared port — mutual exclusion
@@ -68,33 +65,32 @@ services:
     health_endpoint: "/health"
     models_endpoint: "/v1/models"
     timeout_seconds: 2
-    log_file: "/var/log/llama_qwen36_27b_heretic.log"
-    systemd_unit: "llama-heretic.service"
-    model_family: "Qwen3.6"
-    model_size_b: 27
-    model_quant: "Q8_0"
-    model_quant_bits: 8.7
-    context_size: 131072
-    has_thinking: true
-    has_vision: true
-    model_detect_pattern: "(?i)heretic|uncensored"
-    process_patterns: ["heretic", "llama-server"]
-    process_exclude_patterns: ["ik_llama", "MTP", "MiniMax", "GLM", "Qwen3.6-35B"]
+    log_file: "/var/log/llama_my_model.log"
+    systemd_unit: "llama-my-model.service"
+    start_command: ["systemctl", "start", "llama-my-model.service"]
+    stop_command: ["systemctl", "stop", "llama-my-model.service"]
+    model_detect_pattern: "(?i)mymodel"
+    process_patterns: ["llama-server", "my_model"]
+    process_exclude_patterns: ["ik_llama"]
     startup_time_seconds: 90
     stop_timeout_seconds: 15
+    log_filter: default
 
-  # Projet — uses LLM API, doesn't load a model
-  claude_code_proxy:
-    name: "Claude Code Proxy"
+  # Project — uses LLM API, doesn't load a model
+  my_proxy:
+    name: "My Proxy"
     backend: "proxy"
     role: "project"
     exclusive_group: ~
     base_url: "http://127.0.0.1:8082"
     health_endpoint: "/health"
     timeout_seconds: 2
-    systemd_unit: "claude-code-proxy.service"
-    process_patterns: ["start_proxy"]
+    systemd_unit: "my-proxy.service"
+    start_command: ["systemctl", "start", "my-proxy.service"]
+    stop_command: ["systemctl", "stop", "my-proxy.service"]
+    process_patterns: ["my_proxy"]
     startup_time_seconds: 10
+    log_filter: default
 
 gpu:
   enable: true
